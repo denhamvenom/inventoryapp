@@ -375,12 +375,6 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      cursor: pointer;
-      transition: background 0.2s ease;
-    }
-
-    .part-item:hover {
-      background: var(--light-gray);
     }
 
     .part-item:last-child {
@@ -541,6 +535,49 @@
             <div id="partsList" class="part-list"></div>
           </div>
 
+          <!-- ORDER DETAIL PAGE -->
+          <div id="orderDetailPage" style="display: none;">
+            <h3 style="margin-top: 30px; margin-bottom: 20px; color: var(--lsu-purple);">Order Details</h3>
+
+            <div class="info-box" style="background: var(--light-gray); padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+              <div style="margin-bottom: 10px;">
+                <strong>Student:</strong> <span id="orderDetailStudent"></span>
+              </div>
+              <div style="margin-bottom: 10px;">
+                <strong>Part:</strong> <span id="orderDetailPartName"></span>
+              </div>
+              <div style="margin-bottom: 10px;">
+                <strong>Part ID:</strong> <span id="orderDetailPartID"></span>
+              </div>
+              <div>
+                <strong>Specifications:</strong> <span id="orderDetailSpecs"></span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="orderDetailQuantity">Quantity to Order <span class="required">*</span></label>
+              <input type="number" id="orderDetailQuantity" min="1" value="1" style="width: 100%; padding: 10px; font-size: 1em;" oninput="updateOrderCalculation()">
+              <small style="color: var(--dark-gray); display: block; margin-top: 5px;">How many units do you want to order?</small>
+            </div>
+
+            <div class="info-box" style="border-left: 4px solid var(--lsu-gold); background: #fffef0; padding: 15px; margin: 20px 0;">
+              <div style="margin-bottom: 10px; font-size: 1.1em;">
+                <strong>You are ordering:</strong> <span id="orderDetailTotalItems" style="color: var(--lsu-purple); font-weight: 600;">0</span> items
+              </div>
+              <div style="font-size: 0.9em; color: var(--dark-gray);">
+                <span id="orderDetailCalcExplanation"></span>
+              </div>
+              <div style="margin-top: 10px; font-size: 1.2em;">
+                <strong>Total Cost:</strong> <span id="orderDetailTotalCost" style="color: var(--lsu-purple); font-weight: 600;">$0.00</span>
+              </div>
+            </div>
+
+            <div class="button-group" style="margin-top: 20px;">
+              <button type="button" class="button button-secondary" onclick="cancelOrder()">Cancel</button>
+              <button type="button" class="button button-primary" onclick="addOrderToCart()">Add to Cart</button>
+            </div>
+          </div>
+
           <div id="cartContainer" class="cart-container" style="display: none;">
             <div class="cart-header">
               <h3>Your Order</h3>
@@ -667,6 +704,7 @@
     // Global state
     let currentCart = [];
     let availableParts = [];
+    let currentOrderPart = null;
     let isFormUnlocked = false;
     let currentSpecConfig = null;
     let addPartSpecConfig = null;
@@ -991,11 +1029,10 @@
           const item = document.createElement('div');
           item.className = 'part-item';
 
-          // Use quantityPer for stock display (fix for $0.00 and 0 stock issue)
-          const stockQty = part.quantityPer || part.quantity || 0;
+          const quantityPer = part.quantityPer || part.quantity || 0;
           const unitCost = part.unitCost || 0;
 
-          if (stockQty === 0) {
+          if (quantityPer === 0) {
             item.classList.add('out-of-stock');
           }
 
@@ -1003,16 +1040,15 @@
           let specDisplay = formatSpecDisplay(part);
 
           item.innerHTML = `
-            <div>
+            <div style="flex: 1;">
               <div class="part-item-name">${part.partName || 'Unknown Part'}</div>
               <div class="part-item-details">${part.partID || 'N/A'}${specDisplay ? ' - ' + specDisplay : ''}</div>
-              <div class="part-item-stock">In Stock: ${stockQty} | Unit Cost: $${unitCost.toFixed(2)}</div>
+              <div class="part-item-stock">Quantity Per: ${quantityPer} | Unit Cost: $${unitCost.toFixed(2)}</div>
             </div>
+            ${quantityPer > 0 ? '<button class="button button-primary" onclick="showOrderPage(' + index + '); event.stopPropagation();" style="margin-left: 10px; padding: 10px 20px;">Order</button>' : '<span style="color: #999; margin-left: 10px;">Out of Stock</span>'}
           `;
 
-          if (stockQty > 0) {
-            item.addEventListener('click', () => addToCart(index));
-          }
+          // No longer using click event on entire item
 
           list.appendChild(item);
         });
@@ -1057,60 +1093,6 @@
     }
 
     /**
-     * Adds a part to the cart
-     */
-    function addToCart(partIndex) {
-      const part = availableParts[partIndex];
-
-      // Use quantityPer for available stock (fix for display issue)
-      const availableQty = part.quantityPer || part.quantity || 0;
-      const unitCost = part.unitCost || 0;
-
-      // Prompt for quantity
-      const quantity = prompt(`How many ${part.partName} do you need?\n\nAvailable: ${availableQty}`, '1');
-
-      if (quantity === null) return; // User cancelled
-
-      const qty = parseInt(quantity);
-      if (isNaN(qty) || qty <= 0) {
-        alert('Please enter a valid quantity');
-        return;
-      }
-
-      if (qty > availableQty) {
-        alert(`Only ${availableQty} units available in stock`);
-        return;
-      }
-
-      // Build spec display for cart
-      const specDisplay = formatSpecDisplay(part);
-
-      // Check if part already in cart
-      const existingIndex = currentCart.findIndex(item => item.partID === part.partID);
-      if (existingIndex >= 0) {
-        currentCart[existingIndex].quantity += qty;
-        currentCart[existingIndex].totalCost = currentCart[existingIndex].quantity * currentCart[existingIndex].unitCost;
-      } else {
-        currentCart.push({
-          partID: part.partID,
-          partName: part.partName,
-          category: part.category,
-          subcategory: part.subcategory,
-          specifications: specDisplay,
-          quantity: qty,
-          unitCost: unitCost,
-          totalCost: qty * unitCost
-        });
-      }
-
-      updateCartDisplay();
-      showAlert('order', 'success', `Added ${qty} ${part.partName} to your order`);
-
-      // Auto-hide alert after 3 seconds
-      setTimeout(() => hideAlert('order'), 3000);
-    }
-
-    /**
      * Updates the cart display
      */
     function updateCartDisplay() {
@@ -1136,12 +1118,15 @@
         // Show specs if available, otherwise show simple message
         const specText = item.specifications && item.specifications.trim() ? item.specifications : 'Standard part';
 
+        // Calculate total items (quantity × quantityPer)
+        const totalItems = item.quantity * (item.quantityPer || 1);
+
         cartItem.innerHTML = `
           <div class="cart-item-info">
             <div class="cart-item-name">${item.partName}</div>
             <div class="cart-item-details">
               ${item.partID} - ${specText}<br>
-              Quantity: ${item.quantity} x $${item.unitCost.toFixed(2)}
+              Quantity: ${item.quantity} units (${totalItems} items total) x $${item.unitCost.toFixed(2)}
             </div>
           </div>
           <div class="cart-item-price">$${item.totalCost.toFixed(2)}</div>
@@ -1161,6 +1146,112 @@
       updateCartDisplay();
       showAlert('order', 'success', 'Item removed from cart');
       setTimeout(() => hideAlert('order'), 3000);
+    }
+
+    /**
+     * Shows the order detail page for a selected part
+     */
+    function showOrderPage(index) {
+      const part = availableParts[index];
+      if (!part) return;
+
+      const studentName = document.getElementById('studentName').value;
+      if (!studentName) {
+        showAlert('order', 'warning', 'Please select your name first');
+        return;
+      }
+
+      // Store current part
+      currentOrderPart = part;
+
+      // Populate order detail page
+      document.getElementById('orderDetailStudent').textContent = studentName;
+      document.getElementById('orderDetailPartName').textContent = part.partName || 'Unknown Part';
+      document.getElementById('orderDetailPartID').textContent = part.partID || 'N/A';
+      document.getElementById('orderDetailSpecs').textContent = formatSpecDisplay(part) || 'No specifications';
+
+      // Reset quantity to 1
+      document.getElementById('orderDetailQuantity').value = 1;
+
+      // Update calculation
+      updateOrderCalculation();
+
+      // Hide parts list, show order detail page
+      document.getElementById('partsListContainer').style.display = 'none';
+      document.getElementById('orderDetailPage').style.display = 'block';
+
+      // Scroll to top
+      window.scrollTo(0, 0);
+    }
+
+    /**
+     * Updates the order calculation display
+     */
+    function updateOrderCalculation() {
+      if (!currentOrderPart) return;
+
+      const quantity = parseInt(document.getElementById('orderDetailQuantity').value) || 1;
+      const quantityPer = currentOrderPart.quantityPer || currentOrderPart.quantity || 1;
+      const unitCost = currentOrderPart.unitCost || 0;
+
+      const totalItems = quantity * quantityPer;
+      const totalCost = quantity * unitCost;
+
+      // Update display
+      document.getElementById('orderDetailTotalItems').textContent = totalItems;
+      document.getElementById('orderDetailCalcExplanation').textContent =
+        `(${quantity} units × ${quantityPer} per unit)`;
+      document.getElementById('orderDetailTotalCost').textContent = '$' + totalCost.toFixed(2);
+    }
+
+    /**
+     * Cancels the current order and returns to parts list
+     */
+    function cancelOrder() {
+      currentOrderPart = null;
+      document.getElementById('orderDetailPage').style.display = 'none';
+      document.getElementById('partsListContainer').style.display = 'block';
+    }
+
+    /**
+     * Adds the configured order to the cart
+     */
+    function addOrderToCart() {
+      if (!currentOrderPart) return;
+
+      const quantity = parseInt(document.getElementById('orderDetailQuantity').value) || 1;
+
+      if (quantity <= 0) {
+        showAlert('order', 'warning', 'Please enter a valid quantity');
+        return;
+      }
+
+      const quantityPer = currentOrderPart.quantityPer || currentOrderPart.quantity || 1;
+      const unitCost = currentOrderPart.unitCost || 0;
+      const totalCost = quantity * unitCost;
+
+      // Add to cart with all necessary fields
+      const cartItem = {
+        partID: currentOrderPart.partID,
+        partName: currentOrderPart.partName,
+        category: currentOrderPart.category,
+        subcategory: currentOrderPart.subcategory,
+        specifications: formatSpecDisplay(currentOrderPart),
+        quantity: quantity,
+        quantityPer: quantityPer,
+        unitCost: unitCost,
+        totalCost: totalCost
+      };
+
+      currentCart.push(cartItem);
+      updateCartDisplay();
+
+      // Show success message
+      showAlert('order', 'success', `Added ${currentOrderPart.partName} to cart`);
+      setTimeout(() => hideAlert('order'), 3000);
+
+      // Return to parts list
+      cancelOrder();
     }
 
     /**
