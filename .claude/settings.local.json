@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node setup/generateSampleParts.js:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

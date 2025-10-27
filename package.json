@@ -7,8 +7,8 @@
     "push": "clasp push",
     "pull": "clasp pull",
     "deploy": "clasp deploy",
-    "open": "clasp open --webapp",
-    "logs": "clasp logs --tail",
+    "open": "clasp open",
+    "logs": "clasp logs",
     "watch": "clasp push --watch",
     "init-data": "node setup/populateData.js",
     "test": "echo \"Error: no test specified\" && exit 1"
