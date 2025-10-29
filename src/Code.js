@@ -146,6 +146,7 @@ function getPartsByFilters(filters) {
       category: headers.indexOf('Category'),
       subcategory: headers.indexOf('Subcategory'),
       partName: headers.indexOf('Part Name'),
+      productCode: headers.indexOf('Product Code'),
       spec1: headers.indexOf('Spec 1'),
       spec2: headers.indexOf('Spec 2'),
       spec3: headers.indexOf('Spec 3'),
@@ -204,6 +205,7 @@ function getPartsByFilters(filters) {
           category: row[colIndices.category] || '',
           subcategory: row[colIndices.subcategory] || '',
           partName: row[colIndices.partName] || '',
+          productCode: row[colIndices.productCode] || '',
           spec1: row[colIndices.spec1] || '',
           spec2: row[colIndices.spec2] || '',
           spec3: row[colIndices.spec3] || '',
@@ -220,6 +222,75 @@ function getPartsByFilters(filters) {
   } catch (error) {
     Logger.log('Error in getPartsByFilters: ' + error.toString());
     throw new Error('Failed to retrieve parts: ' + error.message);
+  }
+}
+
+/**
+ * Gets parts by product code (case-insensitive exact match)
+ * @param {string} productCode - The product code to search for
+ * @returns {Array<Object>} Array of matching parts
+ */
+function getPartsByProductCode(productCode) {
+  try {
+    if (!productCode) return [];
+
+    const ss = SpreadsheetApp.openById(CONFIG.PARTS_DIRECTORY_ID);
+    const sheet = ss.getSheetByName(CONFIG.PARTS_SHEET_NAME);
+
+    if (!sheet) {
+      throw new Error('Parts sheet not found');
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+
+    // Get column indices (same as getPartsByFilters)
+    const colIndices = {
+      partID: headers.indexOf('Part ID'),
+      category: headers.indexOf('Category'),
+      subcategory: headers.indexOf('Subcategory'),
+      partName: headers.indexOf('Part Name'),
+      productCode: headers.indexOf('Product Code'),
+      spec1: headers.indexOf('Spec 1'),
+      spec2: headers.indexOf('Spec 2'),
+      spec3: headers.indexOf('Spec 3'),
+      spec4: headers.indexOf('Spec 4'),
+      quantityPer: headers.indexOf('Quantity Per'),
+      cost: headers.indexOf('Cost'),
+      location: headers.indexOf('Location/Bin'),
+      supplier: headers.indexOf('Supplier')
+    };
+
+    const parts = [];
+    const searchCode = productCode.toLowerCase().trim();
+
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const rowProductCode = row[colIndices.productCode] ? row[colIndices.productCode].toString().trim().toLowerCase() : '';
+
+      if (rowProductCode === searchCode) {
+        parts.push({
+          partID: row[colIndices.partID] || '',
+          category: row[colIndices.category] || '',
+          subcategory: row[colIndices.subcategory] || '',
+          partName: row[colIndices.partName] || '',
+          productCode: row[colIndices.productCode] || '',
+          spec1: row[colIndices.spec1] || '',
+          spec2: row[colIndices.spec2] || '',
+          spec3: row[colIndices.spec3] || '',
+          spec4: row[colIndices.spec4] || '',
+          quantityPer: row[colIndices.quantityPer] || '',
+          unitCost: parseFloat(row[colIndices.cost]) || 0,
+          location: row[colIndices.location] || '',
+          supplier: row[colIndices.supplier] || ''
+        });
+      }
+    }
+
+    return parts.sort((a, b) => a.partName.localeCompare(b.partName));
+  } catch (error) {
+    Logger.log('Error in getPartsByProductCode: ' + error.toString());
+    throw new Error('Failed to search by product code: ' + error.message);
   }
 }
 
@@ -323,6 +394,109 @@ function submitOrder(orderData) {
 }
 
 /**
+ * Submits a custom part request
+ * @param {Object} requestData - Custom request data
+ * @returns {Object} Result with success status and request ID
+ */
+function submitCustomRequest(requestData) {
+  try {
+    // Validate request data
+    if (!requestData || !requestData.studentName || !requestData.partName) {
+      throw new Error('Invalid request data provided');
+    }
+
+    const ss = SpreadsheetApp.openById(CONFIG.PARTS_ORDERS_ID);
+    const ordersSheet = ss.getSheetByName(CONFIG.ORDERS_SHEET_NAME);
+
+    if (!ordersSheet) {
+      throw new Error('Orders sheet not found');
+    }
+
+    // Generate unique custom request ID
+    const orderNumber = getNextOrderNumber();
+    const customID = getNextCustomRequestID();
+    const timestamp = new Date();
+    const estimatedCost = requestData.estimatedCost || 0;
+    const priority = requestData.priority || 'Medium';
+
+    // Combine justification and link in notes
+    const notes = `CUSTOM REQUEST - Justification: ${requestData.justification} | Link: ${requestData.partLink}`;
+
+    // Create order row
+    // Columns: Order #, Date, Student Name, Part ID, Part Name, Category,
+    //          Quantity Requested, Priority, Unit Cost, Total Cost, Status, Notes, Monday ID
+    const row = [
+      orderNumber,
+      timestamp,
+      requestData.studentName,
+      customID,
+      requestData.partName,
+      'Custom Request',
+      1, // Quantity: always 1 for custom requests
+      priority,
+      estimatedCost,
+      estimatedCost, // Total cost = unit cost for quantity 1
+      'Pending',
+      notes,
+      '' // Monday ID - populated by Zapier
+    ];
+
+    // Append row
+    ordersSheet.appendRow(row);
+
+    return {
+      success: true,
+      requestID: customID,
+      orderNumber: orderNumber,
+      message: 'Custom request submitted successfully'
+    };
+  } catch (error) {
+    Logger.log('Error in submitCustomRequest: ' + error.toString());
+    return {
+      success: false,
+      message: 'Failed to submit custom request: ' + error.message
+    };
+  }
+}
+
+/**
+ * Gets the next custom request ID
+ * @returns {string} Next custom request ID (e.g., "CUSTOM-001")
+ */
+function getNextCustomRequestID() {
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.PARTS_ORDERS_ID);
+    const ordersSheet = ss.getSheetByName(CONFIG.ORDERS_SHEET_NAME);
+
+    if (!ordersSheet) {
+      return 'CUSTOM-001';
+    }
+
+    const data = ordersSheet.getDataRange().getValues();
+    let maxCustomNum = 0;
+
+    // Find highest CUSTOM-### number
+    for (let i = 1; i < data.length; i++) {
+      const partID = data[i][3]; // Part ID column
+      if (partID && partID.toString().startsWith('CUSTOM-')) {
+        const numStr = partID.toString().replace('CUSTOM-', '');
+        const num = parseInt(numStr);
+        if (!isNaN(num) && num > maxCustomNum) {
+          maxCustomNum = num;
+        }
+      }
+    }
+
+    // Generate next ID
+    const nextNum = maxCustomNum + 1;
+    return 'CUSTOM-' + nextNum.toString().padStart(3, '0');
+  } catch (error) {
+    Logger.log('Error in getNextCustomRequestID: ' + error.toString());
+    return 'CUSTOM-001';
+  }
+}
+
+/**
  * Updates inventory quantities after an order is placed
  * @param {Array<Object>} items - Array of ordered items
  */
@@ -418,13 +592,14 @@ function addPartToDirectory(partData) {
     const partID = generatePartID(partData.category);
 
     // Prepare the new row matching Parts sheet structure:
-    // Part ID, Part Name, Category, Subcategory, Spec 1, Spec 2, Spec 3, Spec 4,
+    // Part ID, Part Name, Category, Subcategory, Product Code, Spec 1, Spec 2, Spec 3, Spec 4,
     // Quantity Per, Cost, Supplier, Order Link, Location/Bin, Notes, Status, Date Added, Added By
     const newRow = [
       partID,
       partData.partName,
       partData.category,
       partData.subcategory || '',
+      partData.productCode || '',
       partData.spec1 || '-',
       partData.spec2 || '-',
       partData.spec3 || '-',

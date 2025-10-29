@@ -11,6 +11,7 @@
     "logs": "clasp logs",
     "watch": "clasp push --watch",
     "init-data": "node setup/populateData.js",
+    "import-wcp": "node setup/importWCPParts.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": ["robotics", "parts", "inventory", "frc"],

@@ -493,6 +493,11 @@
           <p>Select your name, choose a category and subcategory to view available parts, then add items to your cart. Review your order and submit when ready.</p>
         </div>
 
+        <div class="button-group" style="margin-bottom: 20px;">
+          <button type="button" id="browseModeBtn" class="button button-primary" onclick="showBrowseInventory()">Browse Inventory</button>
+          <button type="button" id="customModeBtn" class="button button-secondary" onclick="showCustomRequest()">Request Custom Part</button>
+        </div>
+
         <div id="orderAlert" class="alert"></div>
         <div id="orderLoading" class="loading">
           <span class="loading-spinner"></span>
@@ -505,6 +510,14 @@
             <select id="studentName" required>
               <option value="">Select your name...</option>
             </select>
+          </div>
+
+          <!-- BROWSE INVENTORY SECTION -->
+          <div id="browseInventorySection">
+          <div class="form-group">
+            <label for="productCodeSearch">Quick Search by Product Code (Optional)</label>
+            <input type="text" id="productCodeSearch" placeholder="e.g., WCP-0448" style="width: 100%; padding: 10px; font-size: 1em;">
+            <small style="color: var(--dark-gray); display: block; margin-top: 5px;">Enter manufacturer product code to find specific parts. Leave blank to browse by category.</small>
           </div>
 
           <div class="form-row">
@@ -577,6 +590,42 @@
               <button type="button" class="button button-primary" onclick="addOrderToCart()">Add to Cart</button>
             </div>
           </div>
+          </div>
+          <!-- END BROWSE INVENTORY SECTION -->
+
+          <!-- CUSTOM REQUEST SECTION -->
+          <div id="customRequestSection" style="display: none;">
+            <h3 style="margin-top: 20px; margin-bottom: 20px; color: var(--lsu-purple);">Request Custom Part</h3>
+
+            <div class="form-group">
+              <label for="customPartName">Part Name/Description <span class="required">*</span></label>
+              <input type="text" id="customPartName" placeholder="Enter the name or description of the part..." required style="width: 100%; padding: 10px; font-size: 1em;">
+              <small style="color: var(--dark-gray); display: block; margin-top: 5px;">What is the part called or what does it do?</small>
+            </div>
+
+            <div class="form-group">
+              <label for="customPartLink">Product Link/URL <span class="required">*</span></label>
+              <input type="url" id="customPartLink" placeholder="https://example.com/product" required style="width: 100%; padding: 10px; font-size: 1em;">
+              <small style="color: var(--dark-gray); display: block; margin-top: 5px;">Where can we order this part online?</small>
+            </div>
+
+            <div class="form-group">
+              <label for="customPartCost">Estimated Cost (Optional)</label>
+              <input type="number" id="customPartCost" min="0" step="0.01" placeholder="0.00" style="width: 100%; padding: 10px; font-size: 1em;">
+              <small style="color: var(--dark-gray); display: block; margin-top: 5px;">If known, approximately how much does this part cost?</small>
+            </div>
+
+            <div class="form-group">
+              <label for="customPartJustification">Justification/Use Case <span class="required">*</span></label>
+              <textarea id="customPartJustification" rows="4" placeholder="Explain why you need this part and what you plan to use it for..." required style="width: 100%; padding: 10px; font-size: 1em;"></textarea>
+              <small style="color: var(--dark-gray); display: block; margin-top: 5px;">Why do you need this part? What will you use it for?</small>
+            </div>
+
+            <div class="button-group">
+              <button type="button" class="button button-primary" onclick="submitCustomRequest()">Submit Custom Request</button>
+            </div>
+          </div>
+          <!-- END CUSTOM REQUEST SECTION -->
 
           <div id="cartContainer" class="cart-container" style="display: none;">
             <div class="cart-header">
@@ -651,6 +700,12 @@
             <div class="form-group">
               <label for="addPartName">Part Name <span class="required">*</span></label>
               <input type="text" id="addPartName" placeholder="Enter part name..." required>
+            </div>
+
+            <div class="form-group">
+              <label for="addProductCode">Product Code (Optional)</label>
+              <input type="text" id="addProductCode" placeholder="e.g., WCP-0448">
+              <small style="color: var(--dark-gray); display: block; margin-top: 5px;">Manufacturer's product/part number (if applicable)</small>
             </div>
 
             <!-- Dynamic Spec Fields Container -->
@@ -971,6 +1026,29 @@
      * Searches for parts based on filters
      */
     function searchParts() {
+      // Check if product code search is being used
+      const productCode = document.getElementById('productCodeSearch').value.trim();
+
+      if (productCode) {
+        // Search by product code instead
+        showLoading('order', true, 'Searching by product code...');
+        hideParts();
+
+        google.script.run
+          .withSuccessHandler(function(parts) {
+            availableParts = parts;
+            displayParts(parts);
+            showLoading('order', false);
+          })
+          .withFailureHandler(function(error) {
+            showAlert('order', 'error', 'Failed to search: ' + error.message);
+            showLoading('order', false);
+          })
+          .getPartsByProductCode(productCode);
+        return;
+      }
+
+      // Otherwise, proceed with category/subcategory/spec filtering
       const category = document.getElementById('orderCategory').value;
       const subcategory = document.getElementById('orderSubcategory').value;
 
@@ -1043,6 +1121,7 @@
             <div style="flex: 1;">
               <div class="part-item-name">${part.partName || 'Unknown Part'}</div>
               <div class="part-item-details">${part.partID || 'N/A'}${specDisplay ? ' - ' + specDisplay : ''}</div>
+              ${part.productCode ? '<div class="part-item-details" style="color: var(--lsu-gold);">Product Code: ' + part.productCode + '</div>' : ''}
               <div class="part-item-stock">Quantity Per: ${quantityPer} | Unit Cost: $${unitCost.toFixed(2)}</div>
             </div>
             ${quantityPer > 0 ? '<button class="button button-primary" onclick="showOrderPage(' + index + '); event.stopPropagation();" style="margin-left: 10px; padding: 10px 20px;">Order</button>' : '<span style="color: #999; margin-left: 10px;">Out of Stock</span>'}
@@ -1291,6 +1370,19 @@
         return;
       }
 
+      // Require team leader password approval
+      const password = prompt('Team Leader Approval Required\n\nEnter leadership password to approve this order:');
+
+      if (!password) {
+        showAlert('order', 'warning', 'Order submission cancelled - no password entered');
+        return;
+      }
+
+      if (password !== 'venom8044') {
+        showAlert('order', 'error', 'Incorrect password - order not submitted');
+        return;
+      }
+
       if (!confirm('Submit this order? This action cannot be undone.')) {
         return;
       }
@@ -1338,6 +1430,104 @@
       document.getElementById('orderNotes').value = '';
       hideParts();
       availableParts = [];
+    }
+
+    /**
+     * Shows the browse inventory mode
+     */
+    function showBrowseInventory() {
+      document.getElementById('browseInventorySection').style.display = 'block';
+      document.getElementById('customRequestSection').style.display = 'none';
+      document.getElementById('browseModeBtn').className = 'button button-primary';
+      document.getElementById('customModeBtn').className = 'button button-secondary';
+    }
+
+    /**
+     * Shows the custom request mode
+     */
+    function showCustomRequest() {
+      document.getElementById('browseInventorySection').style.display = 'none';
+      document.getElementById('customRequestSection').style.display = 'block';
+      document.getElementById('browseModeBtn').className = 'button button-secondary';
+      document.getElementById('customModeBtn').className = 'button button-primary';
+    }
+
+    /**
+     * Submits a custom part request
+     */
+    function submitCustomRequest() {
+      const studentName = document.getElementById('studentName').value;
+      const partName = document.getElementById('customPartName').value.trim();
+      const partLink = document.getElementById('customPartLink').value.trim();
+      const estimatedCost = parseFloat(document.getElementById('customPartCost').value) || 0;
+      const justification = document.getElementById('customPartJustification').value.trim();
+
+      // Validate required fields
+      if (!studentName) {
+        showAlert('order', 'warning', 'Please select your name');
+        return;
+      }
+
+      if (!partName) {
+        showAlert('order', 'warning', 'Please enter the part name or description');
+        return;
+      }
+
+      if (!partLink) {
+        showAlert('order', 'warning', 'Please provide a product link');
+        return;
+      }
+
+      if (!justification) {
+        showAlert('order', 'warning', 'Please explain why you need this part');
+        return;
+      }
+
+      // Require team leader password approval
+      const password = prompt('Team Leader Approval Required\n\nEnter leadership password to approve this custom request:');
+
+      if (!password) {
+        showAlert('order', 'warning', 'Request cancelled - no password entered');
+        return;
+      }
+
+      if (password !== 'venom8044') {
+        showAlert('order', 'error', 'Incorrect password - request not submitted');
+        return;
+      }
+
+      // Prepare custom request data
+      const requestData = {
+        studentName: studentName,
+        partName: partName,
+        partLink: partLink,
+        estimatedCost: estimatedCost,
+        justification: justification,
+        priority: 'Medium' // Default priority for custom requests
+      };
+
+      showLoading('order', true);
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          showLoading('order', false);
+          if (result.success) {
+            showAlert('order', 'success',
+              `Custom request submitted successfully! Request ID: ${result.requestID}`);
+            // Clear the form
+            document.getElementById('customPartName').value = '';
+            document.getElementById('customPartLink').value = '';
+            document.getElementById('customPartCost').value = '';
+            document.getElementById('customPartJustification').value = '';
+          } else {
+            showAlert('order', 'error', result.message);
+          }
+        })
+        .withFailureHandler(function(error) {
+          showLoading('order', false);
+          showAlert('order', 'error', 'Failed to submit custom request: ' + error.message);
+        })
+        .submitCustomRequest(requestData);
     }
 
     /**
@@ -1562,6 +1752,7 @@
         category: document.getElementById('addCategory').value,
         subcategory: document.getElementById('addSubcategory').value,
         partName: document.getElementById('addPartName').value,
+        productCode: document.getElementById('addProductCode').value.trim(),
         spec1: specValues.spec1,
         spec2: specValues.spec2,
         spec3: specValues.spec3,
