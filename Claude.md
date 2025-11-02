@@ -5,6 +5,12 @@
 2. **AGENT LIMIT**: Maximum 3 concurrent agents at any time to maintain system stability
 3. **NO EMOJIS**: Do not use emojis anywhere - not in code, comments, user interfaces, test data, documentation, or narrative responses
 4. **PROFESSIONAL TONE**: Maintain clean, professional communication throughout all components
+5. **USER RUNS NPM COMMANDS**: Claude Code cannot execute npm/clasp commands in this environment. When deployment or logs are needed:
+   - Claude will make file changes and prepare code
+   - Claude will instruct the user which command to run (e.g., "npm run push")
+   - User must run the command in their terminal
+   - User must paste back any output, errors, or logs that Claude needs to see
+   - This applies to: npm run push, npm run logs, npm run deploy, npm run open, clasp commands
 
 ## Project Overview
 Building a parts ordering system for FRC Team 8044 (Denham Venom) using Google Apps Script, Google Sheets, and integration with Monday.com via Zapier.

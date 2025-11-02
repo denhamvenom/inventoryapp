@@ -20,8 +20,18 @@ const CONFIG = {
   ORDERS_SHEET_NAME: 'Orders',
   STUDENTS_SHEET_NAME: 'Students',
   SPEC_CONFIG_SHEET_NAME: 'Spec Config',
-  ADD_PART_PASSWORD: 'venom8044'
+  ADD_PART_PASSWORD: 'venom8044',
+  MONDAY_ADMIN_PASSWORD: 'eiland8044!'
 };
+
+/**
+ * Verifies Monday.com admin password
+ * @param {string} password - Password to verify
+ * @returns {boolean} True if password is correct
+ */
+function verifyMondayAdminPassword(password) {
+  return password === CONFIG.MONDAY_ADMIN_PASSWORD;
+}
 
 /**
  * Serves the web application
@@ -473,13 +483,23 @@ function getStudentsBySubteam(subteam) {
 
 /**
  * Submits a new parts order
+ * New 20-column structure: Order #, Date, Department, Name, Part ID, Part Name, Category,
+ * Quantity Requested, Priority, Unit Cost, Total Cost, Supplier, Supplier Link, Product Code,
+ * Status, Notes, Justification, CSV File Link, Monday ID, Monday Subitem ID
  * @param {Object} orderData - Object containing order details
  * @returns {Object} Success status and order number
  */
 function submitOrder(orderData) {
   try {
     // Validate order data
-    if (!orderData || !orderData.studentName || !orderData.items || orderData.items.length === 0) {
+    if (!orderData || !orderData.studentName) {
+      throw new Error('Invalid order data provided');
+    }
+
+    const isCSVOrder = orderData.csvFileLink ? true : false;
+
+    // For regular orders, require items
+    if (!isCSVOrder && (!orderData.items || orderData.items.length === 0)) {
       throw new Error('Invalid order data provided');
     }
 
@@ -494,30 +514,69 @@ function submitOrder(orderData) {
     const timestamp = new Date();
     const totalCost = orderData.totalCost || 0;
     const priority = orderData.priority || 'Medium';
+    const department = orderData.department || '';
     const justification = orderData.justification || '';
     const notes = orderData.notes || '';
 
     // Prepare rows for each item in the order
-    // Columns: Order #, Date, Student Name, Part ID, Part Name, Category,
-    //          Quantity Requested, Priority, Justification, Unit Cost, Total Cost, Status, Notes, Monday ID
+    // 20 columns: Order #, Date, Department, Name, Part ID, Part Name, Category,
+    // Quantity Requested, Priority, Unit Cost, Total Cost, Supplier, Supplier Link, Product Code,
+    // Status, Notes, Justification, CSV File Link, Monday ID, Monday Subitem ID
     const rows = [];
-    for (const item of orderData.items) {
+
+    if (isCSVOrder) {
+      // CSV orders: single row with special values
       rows.push([
-        orderNumber,
-        timestamp,
-        orderData.studentName,
-        item.partID,
-        item.partName,
-        item.category,
-        parseInt(item.quantity) || 0,
-        priority,
-        justification,
-        parseFloat(item.unitCost) || 0,
-        parseFloat(item.totalCost) || 0,
-        'Pending',
-        notes,
-        ''  // Monday ID - populated by Zapier integration
+        orderNumber,                           // 1. Order #
+        timestamp,                             // 2. Date
+        department,                            // 3. Department
+        orderData.studentName,                 // 4. Name
+        'CSV-ORDER',                           // 5. Part ID
+        'WCP CSV Order',                       // 6. Part Name
+        'WCP Import',                          // 7. Category
+        1,                                     // 8. Quantity Requested
+        priority,                              // 9. Priority
+        0,                                     // 10. Unit Cost
+        0,                                     // 11. Total Cost
+        'WCP',                                 // 12. Supplier
+        'https://wcproducts.com/apps/quick-order', // 13. Supplier Link
+        'CSV-ORDER',                           // 14. Product Code
+        'Pending',                             // 15. Status
+        notes,                                 // 16. Notes
+        'CSV order - no justification',       // 17. Justification
+        orderData.csvFileLink,                 // 18. CSV File Link
+        '',                                    // 19. Monday ID - populated by Zapier
+        ''                                     // 20. Monday Subitem ID - populated by Zapier
       ]);
+    } else {
+      // Regular orders: one row per item
+      for (const item of orderData.items) {
+        // Lookup part details from Parts Directory
+        const partDetails = getPartDetailsForOrder(item.partID);
+
+        rows.push([
+          orderNumber,                           // 1. Order #
+          timestamp,                             // 2. Date
+          department,                            // 3. Department
+          orderData.studentName,                 // 4. Name
+          item.partID,                           // 5. Part ID
+          item.partName,                         // 6. Part Name
+          item.category,                         // 7. Category
+          parseInt(item.quantity) || 0,          // 8. Quantity Requested
+          priority,                              // 9. Priority
+          parseFloat(item.unitCost) || 0,        // 10. Unit Cost
+          parseFloat(item.totalCost) || 0,       // 11. Total Cost
+          partDetails.supplier,                  // 12. Supplier
+          partDetails.supplierLink,              // 13. Supplier Link
+          partDetails.productCode,               // 14. Product Code
+          'Pending',                             // 15. Status
+          notes,                                 // 16. Notes
+          justification,                         // 17. Justification
+          '',                                    // 18. CSV File Link (empty for regular)
+          '',                                    // 19. Monday ID - populated by Zapier
+          ''                                     // 20. Monday Subitem ID - populated by Zapier
+        ]);
+      }
     }
 
     // Append all rows at once
@@ -525,8 +584,10 @@ function submitOrder(orderData) {
       ordersSheet.getRange(ordersSheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
     }
 
-    // Update inventory quantities in Parts Directory
-    updateInventoryQuantities(orderData.items);
+    // Update inventory quantities in Parts Directory (skip for CSV orders)
+    if (!isCSVOrder) {
+      updateInventoryQuantities(orderData.items);
+    }
 
     return {
       success: true,
@@ -544,6 +605,9 @@ function submitOrder(orderData) {
 
 /**
  * Submits a custom part request
+ * New 20-column structure: Order #, Date, Department, Name, Part ID, Part Name, Category,
+ * Quantity Requested, Priority, Unit Cost, Total Cost, Supplier, Supplier Link, Product Code,
+ * Status, Notes, Justification, CSV File Link, Monday ID, Monday Subitem ID
  * @param {Object} requestData - Custom request data
  * @returns {Object} Result with success status and request ID
  */
@@ -567,27 +631,36 @@ function submitCustomRequest(requestData) {
     const timestamp = new Date();
     const estimatedCost = requestData.estimatedCost || 0;
     const priority = requestData.priority || 'Medium';
+    const department = requestData.department || '';
+    const supplier = requestData.whereToBuy || '';
+    const supplierLink = requestData.partLink || '';
+    const justification = requestData.justification || '';
 
-    // Combine justification and link in notes
-    const notes = `CUSTOM REQUEST - Justification: ${requestData.justification} | Link: ${requestData.partLink}`;
-
-    // Create order row
-    // Columns: Order #, Date, Student Name, Part ID, Part Name, Category,
-    //          Quantity Requested, Priority, Unit Cost, Total Cost, Status, Notes, Monday ID
+    // Create order row with 20 columns
+    // Order #, Date, Department, Name, Part ID, Part Name, Category,
+    // Quantity Requested, Priority, Unit Cost, Total Cost, Supplier, Supplier Link, Product Code,
+    // Status, Notes, Justification, CSV File Link, Monday ID, Monday Subitem ID
     const row = [
-      orderNumber,
-      timestamp,
-      requestData.studentName,
-      customID,
-      requestData.partName,
-      'Custom Request',
-      1, // Quantity: always 1 for custom requests
-      priority,
-      estimatedCost,
-      estimatedCost, // Total cost = unit cost for quantity 1
-      'Pending',
-      notes,
-      '' // Monday ID - populated by Zapier
+      orderNumber,                    // 1. Order #
+      timestamp,                      // 2. Date
+      department,                     // 3. Department
+      requestData.studentName,        // 4. Name
+      customID,                       // 5. Part ID
+      requestData.partName,           // 6. Part Name
+      'Custom Request',               // 7. Category
+      1,                              // 8. Quantity Requested (always 1 for custom)
+      priority,                       // 9. Priority
+      estimatedCost,                  // 10. Unit Cost
+      estimatedCost,                  // 11. Total Cost (unit cost * 1)
+      supplier,                       // 12. Supplier (from whereToBuy field)
+      supplierLink,                   // 13. Supplier Link (from partLink field)
+      'N/A',                          // 14. Product Code (N/A for custom requests)
+      'Pending',                      // 15. Status
+      'CUSTOM REQUEST',               // 16. Notes
+      justification,                  // 17. Justification
+      '',                             // 18. CSV File Link (empty for custom)
+      '',                             // 19. Monday ID - populated by Zapier
+      ''                              // 20. Monday Subitem ID - populated by Zapier
     ];
 
     // Append row
@@ -609,6 +682,60 @@ function submitCustomRequest(requestData) {
 }
 
 /**
+ * Gets part details from Parts Directory for order submission
+ * Looks up Supplier, Supplier Link (Order Link), and Product Code by Part ID
+ * @param {string} partID - The Part ID to look up
+ * @returns {Object} Object containing supplier, supplierLink, and productCode
+ */
+function getPartDetailsForOrder(partID) {
+  try {
+    if (!partID) {
+      return { supplier: '', supplierLink: '', productCode: '' };
+    }
+
+    const ss = SpreadsheetApp.openById(CONFIG.PARTS_DIRECTORY_ID);
+    const sheet = ss.getSheetByName(CONFIG.PARTS_SHEET_NAME);
+
+    if (!sheet) {
+      Logger.log('Parts sheet not found in getPartDetailsForOrder');
+      return { supplier: '', supplierLink: '', productCode: '' };
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+
+    // Get column indices
+    const partIDCol = headers.indexOf('Part ID');
+    const supplierCol = headers.indexOf('Supplier');
+    const orderLinkCol = headers.indexOf('Order Link');
+    const productCodeCol = headers.indexOf('Product Code');
+
+    if (partIDCol === -1) {
+      Logger.log('Part ID column not found in getPartDetailsForOrder');
+      return { supplier: '', supplierLink: '', productCode: '' };
+    }
+
+    // Find the matching part
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][partIDCol] && data[i][partIDCol].toString().trim() === partID.trim()) {
+        return {
+          supplier: supplierCol !== -1 && data[i][supplierCol] ? data[i][supplierCol].toString().trim() : '',
+          supplierLink: orderLinkCol !== -1 && data[i][orderLinkCol] ? data[i][orderLinkCol].toString().trim() : '',
+          productCode: productCodeCol !== -1 && data[i][productCodeCol] ? data[i][productCodeCol].toString().trim() : ''
+        };
+      }
+    }
+
+    // Part ID not found
+    Logger.log('Part ID not found in Parts Directory: ' + partID);
+    return { supplier: '', supplierLink: '', productCode: '' };
+  } catch (error) {
+    Logger.log('Error in getPartDetailsForOrder: ' + error.toString());
+    return { supplier: '', supplierLink: '', productCode: '' };
+  }
+}
+
+/**
  * Gets the next custom request ID
  * @returns {string} Next custom request ID (e.g., "CUSTOM-001")
  */
@@ -625,8 +752,9 @@ function getNextCustomRequestID() {
     let maxCustomNum = 0;
 
     // Find highest CUSTOM-### number
+    // Part ID is column index 4 (Department column is index 2)
     for (let i = 1; i < data.length; i++) {
-      const partID = data[i][3]; // Part ID column
+      const partID = data[i][4]; // Part ID column (0-indexed: Order #, Date, Department, Name, Part ID)
       if (partID && partID.toString().startsWith('CUSTOM-')) {
         const numStr = partID.toString().replace('CUSTOM-', '');
         const num = parseInt(numStr);
@@ -917,10 +1045,11 @@ function getNextOrderNumber() {
     // Get all existing order numbers
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
-    const orderNumCol = headers.indexOf('Order Number');
+    const orderNumCol = headers.indexOf('Order #');
 
     if (orderNumCol === -1) {
       // If column not found, return first order of the day
+      Logger.log('Warning: Order # column not found in Orders sheet');
       return prefix + '001';
     }
 
@@ -965,6 +1094,65 @@ function validateAccess(password) {
   } catch (error) {
     Logger.log('Error in validateAccess: ' + error.toString());
     return { isValid: false };
+  }
+}
+
+/**
+ * Creates or retrieves the WCP Orders folder in Google Drive
+ * @returns {string} Folder ID
+ */
+function createWCPOrdersFolder() {
+  try {
+    const folders = DriveApp.getFoldersByName('WCP Orders');
+    if (folders.hasNext()) {
+      return folders.next().getId();
+    }
+
+    const folder = DriveApp.createFolder('WCP Orders');
+    folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    return folder.getId();
+  } catch (error) {
+    Logger.log('Error creating WCP Orders folder: ' + error.toString());
+    throw new Error('Failed to create Drive folder: ' + error.message);
+  }
+}
+
+/**
+ * Uploads a CSV file to the WCP Orders folder in Google Drive
+ * @param {string} fileContent - Base64-encoded or plain text CSV content
+ * @param {string} fileName - Original filename from user
+ * @param {string} orderNumber - Order number for filename
+ * @returns {Object} Result object with success status and file info
+ */
+function uploadCSVToDrive(fileContent, fileName, orderNumber) {
+  try {
+    const folderId = createWCPOrdersFolder();
+    const folder = DriveApp.getFolderById(folderId);
+
+    let csvData = fileContent;
+    if (fileContent.includes('base64,')) {
+      const base64Data = fileContent.split('base64,')[1];
+      csvData = Utilities.newBlob(Utilities.base64Decode(base64Data)).getDataAsString();
+    }
+
+    const standardFileName = 'WCP_Order_' + orderNumber + '.csv';
+
+    const file = folder.createFile(standardFileName, csvData, MimeType.CSV);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    return {
+      success: true,
+      fileId: file.getId(),
+      fileUrl: file.getUrl(),
+      fileName: standardFileName
+    };
+  } catch (error) {
+    Logger.log('Error uploading CSV to Drive: ' + error.toString());
+    return {
+      success: false,
+      message: 'Failed to upload file: ' + error.message
+    };
   }
 }
 
@@ -1184,5 +1372,95 @@ function getSpecValues(category, subcategory, type, specNumber) {
   } catch (error) {
     Logger.log('Error in getSpecValues: ' + error.toString());
     return [];
+  }
+}
+
+/**
+ * Manual sync function for testing (callable from webapp)
+ * @returns {Object} Sync results with counts
+ */
+function syncToMondayManual() {
+  try {
+    const newOrdersResult = processNewOrders();
+    const statusResult = syncMondayToSheets();
+
+    return {
+      success: true,
+      created: newOrdersResult.created,
+      updated: statusResult.updated,
+      errors: newOrdersResult.failed
+    };
+  } catch (error) {
+    Logger.log('Manual sync error: ' + error.toString());
+    return {
+      success: false,
+      message: error.message,
+      created: 0,
+      updated: 0,
+      errors: 1
+    };
+  }
+}
+
+/**
+ * Syncs to Monday.com with admin password verification
+ * @param {string} password - Admin password
+ * @returns {Object} Sync result
+ */
+function syncToMondayWithPassword(password) {
+  try {
+    if (!verifyMondayAdminPassword(password)) {
+      return {
+        success: false,
+        message: 'Incorrect admin password'
+      };
+    }
+
+    return syncToMondayManual();
+  } catch (error) {
+    Logger.log('Password-protected sync error: ' + error.toString());
+    return {
+      success: false,
+      message: error.message
+    };
+  }
+}
+
+/**
+ * Scheduled sync function for time-based trigger
+ */
+function syncToMondayScheduled() {
+  const result = syncToMondayManual();
+  Logger.log('Scheduled sync complete: ' + JSON.stringify(result));
+}
+
+/**
+ * One-time setup function to store Monday.com credentials
+ * Run this once from Apps Script editor, then delete
+ */
+function setupMondayApiToken() {
+  const token = 'eyJhbGciOiJIUzI1NiJ9.eyJ0aWQiOjI4OTcxMzMyNywiYWFpIjoxMSwidWlkIjozMzE3MjU1NiwiaWFkIjoiMjAyMy0xMC0xOFQxNzo0MTo0NC4wMDBaIiwicGVyIjoibWU6d3JpdGUiLCJhY3RpZCI6MTMwNzc3MDYsInJnbiI6InVzZTEifQ.p3zitBOQhW8TDcwiT7uZLlbcAnd7nfVCmfspwEpf5Ic';
+  const boardId = '3241360873';
+
+  PropertiesService.getScriptProperties().setProperty('MONDAY_API_TOKEN', token);
+  PropertiesService.getScriptProperties().setProperty('MONDAY_BOARD_ID', boardId);
+
+  Logger.log('Monday.com credentials stored successfully');
+  Logger.log('IMPORTANT: Delete the setupMondayApiToken function after running once');
+}
+
+/**
+ * One-time function to activate automatic Monday.com syncing
+ * Run this ONCE from Apps Script editor after deployment
+ * Creates time-based triggers for automatic sync every 5 minutes
+ */
+function activateMondayAutoSync() {
+  try {
+    const result = setupMondayTriggers();
+    Logger.log('Auto-sync activation: ' + JSON.stringify(result));
+    return result;
+  } catch (error) {
+    Logger.log('Failed to activate auto-sync: ' + error.toString());
+    return { success: false, message: error.message };
   }
 }

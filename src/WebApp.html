@@ -496,6 +496,7 @@
         <div class="button-group" style="margin-bottom: 20px;">
           <button type="button" id="browseModeBtn" class="button button-primary" onclick="showBrowseInventory()">Browse Inventory</button>
           <button type="button" id="customModeBtn" class="button button-secondary" onclick="showCustomRequest()">Request Custom Part</button>
+          <button type="button" id="csvModeBtn" class="button button-secondary" onclick="showCSVUpload()">Order by WCP CSV</button>
         </div>
 
         <div id="orderAlert" class="alert"></div>
@@ -636,11 +637,82 @@
               <small style="color: var(--dark-gray); display: block; margin-top: 5px;">Why do you need this part? What will you use it for?</small>
             </div>
 
+            <div class="form-group">
+              <label for="customPriority">Priority <span class="required">*</span></label>
+              <select id="customPriority" required style="width: 100%; padding: 10px; font-size: 1em;">
+                <option value="">Select priority...</option>
+                <option value="Low">Low - Whenever Possible</option>
+                <option value="Medium" selected>Medium - within 1 Week</option>
+                <option value="High">High - 2 Days</option>
+                <option value="Emergency">Emergency - Next Day</option>
+              </select>
+              <small style="color: var(--dark-gray); display: block; margin-top: 5px;">How urgently do you need this part?</small>
+            </div>
+
             <div class="button-group">
               <button type="button" class="button button-primary" onclick="submitCustomRequest()">Submit Custom Request</button>
             </div>
           </div>
           <!-- END CUSTOM REQUEST SECTION -->
+
+          <!-- CSV UPLOAD SECTION -->
+          <div id="csvUploadSection" style="display: none;">
+            <h3 style="margin-top: 20px; margin-bottom: 20px; color: var(--lsu-purple);">
+              Order Parts by WCP CSV Upload
+            </h3>
+
+            <div class="info-box">
+              <h4>How This Works</h4>
+              <p>Upload a WCP (West Coast Products) CSV file containing the parts you want to order.
+                 The file will be reviewed by team leadership and processed accordingly.</p>
+              <p><strong>Note:</strong> This method bypasses the shopping cart and does not require justification.</p>
+            </div>
+
+            <div class="form-group">
+              <label for="csvFileInput">
+                Select WCP CSV File <span class="required">*</span>
+              </label>
+              <input type="file"
+                     id="csvFileInput"
+                     accept=".csv"
+                     style="width: 100%; padding: 10px; font-size: 1em; border: 2px solid var(--medium-gray); border-radius: 5px;">
+              <small style="color: var(--dark-gray); display: block; margin-top: 5px;">
+                Maximum file size: 10MB. Only CSV files accepted.
+              </small>
+              <div id="csvFilePreview" style="margin-top: 10px; display: none;">
+                <strong>Selected file:</strong> <span id="csvFileName"></span>
+                (<span id="csvFileSize"></span>)
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="csvOrderPriority">Priority <span class="required">*</span></label>
+              <select id="csvOrderPriority" required>
+                <option value="">Select priority...</option>
+                <option value="Emergency">Emergency - Next Day</option>
+                <option value="High">High - 2 Days</option>
+                <option value="Medium" selected>Medium - within 1 Week</option>
+                <option value="Low">Low - Whenever Possible</option>
+              </select>
+              <small style="color: var(--dark-gray); display: block; margin-top: 5px;">
+                CSV orders default to Medium priority unless changed.
+              </small>
+            </div>
+
+            <div class="form-group">
+              <label for="csvOrderNotes">Notes (Optional)</label>
+              <textarea id="csvOrderNotes"
+                        rows="3"
+                        placeholder="Add any special instructions or context for this CSV order..."></textarea>
+            </div>
+
+            <div class="button-group">
+              <button type="button" class="button button-primary" onclick="submitCSVOrder()">
+                Upload and Submit Order
+              </button>
+            </div>
+          </div>
+          <!-- END CSV UPLOAD SECTION -->
 
           <div id="cartContainer" class="cart-container" style="display: none;">
             <div class="cart-header">
@@ -657,9 +729,10 @@
               <label for="orderPriority">Priority <span class="required">*</span></label>
               <select id="orderPriority" required>
                 <option value="">Select priority...</option>
-                <option value="High">High - Needed immediately</option>
-                <option value="Medium">Medium - Needed within a week</option>
-                <option value="Low">Low - Needed when available</option>
+                <option value="Emergency">Emergency - Next Day</option>
+                <option value="High">High - 2 Days</option>
+                <option value="Medium">Medium - within 1 Week</option>
+                <option value="Low">Low - Whenever Possible</option>
               </select>
             </div>
 
@@ -799,6 +872,42 @@
     // Initialize application
     document.addEventListener('DOMContentLoaded', function() {
       loadInitialData();
+    });
+
+    // CSV file input handler
+    window.addEventListener('load', function() {
+      const csvFileInput = document.getElementById('csvFileInput');
+      if (csvFileInput) {
+        csvFileInput.addEventListener('change', function(e) {
+          const file = e.target.files[0];
+          const previewDiv = document.getElementById('csvFilePreview');
+
+          if (!file) {
+            previewDiv.style.display = 'none';
+            return;
+          }
+
+          if (!file.name.toLowerCase().endsWith('.csv')) {
+            showAlert('order', 'error', 'Please select a CSV file');
+            e.target.value = '';
+            previewDiv.style.display = 'none';
+            return;
+          }
+
+          const maxSize = 10 * 1024 * 1024;
+          if (file.size > maxSize) {
+            showAlert('order', 'error', 'File size exceeds 10MB limit. Please select a smaller file.');
+            e.target.value = '';
+            previewDiv.style.display = 'none';
+            return;
+          }
+
+          document.getElementById('csvFileName').textContent = file.name;
+          document.getElementById('csvFileSize').textContent = formatFileSize(file.size);
+          previewDiv.style.display = 'block';
+          hideAlert('order');
+        });
+      }
     });
 
     /**
@@ -1520,6 +1629,7 @@
 
       const orderData = {
         studentName: studentName,
+        department: subteam,
         items: currentCart,
         totalCost: totalCost,
         priority: priority,
@@ -1573,8 +1683,10 @@
     function showBrowseInventory() {
       document.getElementById('browseInventorySection').style.display = 'block';
       document.getElementById('customRequestSection').style.display = 'none';
+      document.getElementById('csvUploadSection').style.display = 'none';
       document.getElementById('browseModeBtn').className = 'button button-primary';
       document.getElementById('customModeBtn').className = 'button button-secondary';
+      document.getElementById('csvModeBtn').className = 'button button-secondary';
     }
 
     /**
@@ -1583,8 +1695,145 @@
     function showCustomRequest() {
       document.getElementById('browseInventorySection').style.display = 'none';
       document.getElementById('customRequestSection').style.display = 'block';
+      document.getElementById('csvUploadSection').style.display = 'none';
       document.getElementById('browseModeBtn').className = 'button button-secondary';
       document.getElementById('customModeBtn').className = 'button button-primary';
+      document.getElementById('csvModeBtn').className = 'button button-secondary';
+    }
+
+    /**
+     * Shows the CSV upload mode
+     */
+    function showCSVUpload() {
+      document.getElementById('browseInventorySection').style.display = 'none';
+      document.getElementById('customRequestSection').style.display = 'none';
+      document.getElementById('csvUploadSection').style.display = 'block';
+      document.getElementById('browseModeBtn').className = 'button button-secondary';
+      document.getElementById('customModeBtn').className = 'button button-secondary';
+      document.getElementById('csvModeBtn').className = 'button button-primary';
+    }
+
+    /**
+     * Formats file size in human-readable format
+     */
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    /**
+     * Submits a CSV order
+     */
+    function submitCSVOrder() {
+      const subteam = document.getElementById('subteam').value;
+      const studentName = document.getElementById('studentName').value;
+      const fileInput = document.getElementById('csvFileInput');
+      const priority = document.getElementById('csvOrderPriority').value;
+      const notes = document.getElementById('csvOrderNotes').value.trim();
+
+      if (!subteam) {
+        showAlert('order', 'warning', 'Please select your subteam');
+        return;
+      }
+
+      if (!studentName) {
+        showAlert('order', 'warning', 'Please select your name');
+        return;
+      }
+
+      if (!fileInput.files || fileInput.files.length === 0) {
+        showAlert('order', 'warning', 'Please select a CSV file to upload');
+        return;
+      }
+
+      if (!priority) {
+        showAlert('order', 'warning', 'Please select a priority level');
+        return;
+      }
+
+      const file = fileInput.files[0];
+
+      // Require team leader password approval for CSV uploads
+      const password = prompt('Team Leader Approval Required\n\nEnter leadership password to approve this CSV upload:');
+
+      if (!password) {
+        showAlert('order', 'warning', 'Upload cancelled - no password entered');
+        return;
+      }
+
+      if (password !== 'venom8044') {
+        showAlert('order', 'error', 'Incorrect password - upload not submitted');
+        return;
+      }
+
+      if (!confirm('Submit this WCP CSV order?\n\nFile: ' + file.name + '\nThis action cannot be undone.')) {
+        return;
+      }
+
+      showLoading('order', true, 'Uploading CSV file...');
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const fileContent = e.target.result;
+        const fileName = file.name;
+
+        const tempOrderNumber = 'ORD-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-TMP';
+
+        google.script.run
+          .withSuccessHandler(function(uploadResult) {
+            if (!uploadResult.success) {
+              showLoading('order', false);
+              showAlert('order', 'error', 'File upload failed: ' + uploadResult.message);
+              return;
+            }
+
+            const orderData = {
+              studentName: studentName,
+              department: subteam,
+              csvFileLink: uploadResult.fileUrl,
+              csvFileName: uploadResult.fileName,
+              priority: priority,
+              notes: notes || 'WCP CSV Order: ' + fileName,
+              items: []
+            };
+
+            showLoading('order', true, 'Submitting order...');
+
+            google.script.run
+              .withSuccessHandler(function(result) {
+                showLoading('order', false);
+                if (result.success) {
+                  showAlert('order', 'success',
+                    'CSV order submitted successfully! Order Number: ' + result.orderNumber);
+
+                  fileInput.value = '';
+                  document.getElementById('csvFilePreview').style.display = 'none';
+                  document.getElementById('csvOrderPriority').value = 'Medium';
+                  document.getElementById('csvOrderNotes').value = '';
+                } else {
+                  showAlert('order', 'error', result.message);
+                }
+              })
+              .withFailureHandler(function(error) {
+                showLoading('order', false);
+                showAlert('order', 'error', 'Failed to submit order: ' + error.message);
+              })
+              .submitOrder(orderData);
+          })
+          .withFailureHandler(function(error) {
+            showLoading('order', false);
+            showAlert('order', 'error', 'File upload failed: ' + error.message);
+          })
+          .uploadCSVToDrive(fileContent, fileName, tempOrderNumber);
+      };
+
+      reader.onerror = function() {
+        showLoading('order', false);
+        showAlert('order', 'error', 'Failed to read file. Please try again.');
+      };
+
+      reader.readAsDataURL(file);
     }
 
     /**
@@ -1597,6 +1846,7 @@
       const partLink = document.getElementById('customPartLink').value.trim();
       const estimatedCost = parseFloat(document.getElementById('customPartCost').value) || 0;
       const justification = document.getElementById('customPartJustification').value.trim();
+      const priority = document.getElementById('customPriority').value;
 
       // Validate required fields
       if (!subteam) {
@@ -1624,6 +1874,11 @@
         return;
       }
 
+      if (!priority) {
+        showAlert('order', 'warning', 'Please select a priority level');
+        return;
+      }
+
       // Require team leader password approval
       const password = prompt('Team Leader Approval Required\n\nEnter leadership password to approve this custom request:');
 
@@ -1640,11 +1895,13 @@
       // Prepare custom request data
       const requestData = {
         studentName: studentName,
+        department: subteam,
         partName: partName,
+        whereToBuy: partLink,
         partLink: partLink,
         estimatedCost: estimatedCost,
         justification: justification,
-        priority: 'Medium' // Default priority for custom requests
+        priority: priority
       };
 
       showLoading('order', true);
@@ -2048,6 +2305,43 @@
         }
       }
     }
+
+  </script>
+
+  <!-- ADMIN: Manual Monday Sync (Password Protected) -->
+  <div style="position: fixed; bottom: 10px; right: 10px; font-size: 11px;">
+    <button onclick="promptMondaySync()" style="background: #6c757d; color: white; border: none; padding: 5px 10px; font-size: 11px; cursor: pointer; border-radius: 3px;">
+      Admin: Manual Sync
+    </button>
+    <div id="adminSyncResult" style="font-size: 10px; margin-top: 3px; color: #666;"></div>
+  </div>
+
+  <script>
+  function promptMondaySync() {
+    const password = prompt('Enter admin password:');
+    if (!password) return;
+
+    const resultDiv = document.getElementById('adminSyncResult');
+    resultDiv.textContent = 'Syncing...';
+    resultDiv.style.color = '#666';
+
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          resultDiv.textContent = 'Created: ' + result.created + ', Updated: ' + result.updated;
+          resultDiv.style.color = '#28a745';
+          setTimeout(() => { resultDiv.textContent = ''; }, 5000);
+        } else {
+          resultDiv.textContent = result.message || 'Sync failed';
+          resultDiv.style.color = '#dc3545';
+        }
+      })
+      .withFailureHandler(function(error) {
+        resultDiv.textContent = 'Error: ' + error.message;
+        resultDiv.style.color = '#dc3545';
+      })
+      .syncToMondayWithPassword(password);
+  }
   </script>
 </body>
 </html>

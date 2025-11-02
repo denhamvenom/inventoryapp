@@ -52,20 +52,27 @@ A comprehensive parts ordering and inventory management system for FRC Team 8044
 **Purpose**: Track all part orders and requests
 
 **Sheets/Tabs**:
-- **Orders** (Active orders)
+- **Orders** (Active orders - 20 columns)
   - Order # (auto-generated: ORD-YYYYMMDD-XXX)
   - Date (auto-timestamp)
-  - Student Name
-  - Part ID
-  - Part Name (auto-filled via VLOOKUP)
-  - Category (auto-filled via VLOOKUP)
-  - Quantity Requested
+  - Department (Student's subteam: Mechanical/Electrical/Programming/Business)
+  - Name (Student name from roster)
+  - Part ID (from Parts Directory for regular orders, empty for custom requests)
+  - Part Name (auto-filled via VLOOKUP for regular orders, manual entry for custom requests)
+  - Category (auto-filled via VLOOKUP for regular orders, manual entry for custom requests)
+  - Quantity Requested (numeric 1-999)
   - Priority (Low/Medium/High/Urgent)
-  - Unit Cost (auto-filled via VLOOKUP)
-  - Total Cost (formula: Quantity * Unit Cost)
-  - Status (Requested/Approved/Ordered/Received)
-  - Notes
-  - Monday ID (from Zapier integration)
+  - Unit Cost (auto-filled via VLOOKUP for regular orders, manual entry for custom requests)
+  - Total Cost (formula: Quantity Requested * Unit Cost)
+  - Supplier (auto-filled from Parts Directory for regular orders, from "Where to Buy" for custom requests, "WCP" for CSV orders)
+  - Supplier Link (Order Link from Parts Directory for regular orders, provided URL for custom requests, empty for CSV orders)
+  - Product Code (Product Code from Parts Directory for regular orders, empty for custom and CSV orders)
+  - Status (Requested/Approved/Ordered/Received/Cancelled)
+  - Notes (optional)
+  - Justification (required for custom part requests)
+  - CSV File Link (Google Drive link to uploaded CSV file for bulk orders)
+  - Monday ID (parent item ID from Monday.com via Zapier - syncs every 5 minutes for regular orders)
+  - Monday Subitem ID (subitem ID from Monday.com via Zapier - syncs immediately for custom requests after password approval)
 
 - **Students** (Team roster)
   - Name
