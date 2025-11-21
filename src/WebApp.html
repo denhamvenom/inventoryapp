@@ -576,14 +576,14 @@
         <form id="orderForm" onsubmit="return false;">
           <div class="form-group">
             <label for="subteam">Subteam <span class="required">*</span></label>
-            <select id="subteam">
+            <select id="subteam" name="subteam">
               <option value="">Select subteam...</option>
             </select>
           </div>
 
           <div class="form-group">
             <label for="studentName">Name <span class="required">*</span></label>
-            <select id="studentName" disabled>
+            <select id="studentName" name="studentName" disabled>
               <option value="">Select subteam first...</option>
             </select>
           </div>
@@ -707,14 +707,14 @@
           <div class="form-row">
             <div class="form-group">
               <label for="orderCategory">Category <span class="required">*</span></label>
-              <select id="orderCategory" required>
+              <select id="orderCategory" name="orderCategory">
                 <option value="">Select category...</option>
               </select>
             </div>
 
             <div class="form-group">
               <label for="orderSubcategory">Subcategory <span class="required">*</span></label>
-              <select id="orderSubcategory" disabled>
+              <select id="orderSubcategory" name="orderSubcategory" disabled>
                 <option value="">Select category first...</option>
               </select>
             </div>
@@ -723,7 +723,7 @@
           <!-- NEW: Type Dropdown -->
           <div class="form-group">
             <label for="orderType">Type <span class="required">*</span></label>
-            <select id="orderType" disabled>
+            <select id="orderType" name="orderType" disabled>
               <option value="">Select subcategory first...</option>
             </select>
           </div>
@@ -734,8 +734,16 @@
           <div class="button-group">
             <button type="button" class="button button-secondary" onclick="searchParts()">Search Parts</button>
           </div>
+          </div>
+          <!-- END BROWSE INVENTORY SECTION -->
 
-          <!-- ORDER DETAIL PAGE -->
+          <!-- PARTS LIST CONTAINER (Shared across all search modes) -->
+          <div id="partsListContainer" style="display: none;">
+            <h3 style="margin-top: 30px; margin-bottom: 10px; color: var(--lsu-purple);">Available Parts</h3>
+            <div id="partsList" class="part-list"></div>
+          </div>
+
+          <!-- ORDER DETAIL PAGE (Shared across all order sources) -->
           <div id="orderDetailPage" style="display: none;">
             <h3 style="margin-top: 30px; margin-bottom: 20px; color: var(--lsu-purple);">Order Details</h3>
 
@@ -777,14 +785,6 @@
               <button type="button" class="button button-primary" onclick="addOrderToCart()">Add to Cart</button>
             </div>
           </div>
-          </div>
-          <!-- END BROWSE INVENTORY SECTION -->
-
-          <!-- PARTS LIST CONTAINER (Shared across all search modes) -->
-          <div id="partsListContainer" style="display: none;">
-            <h3 style="margin-top: 30px; margin-bottom: 10px; color: var(--lsu-purple);">Available Parts</h3>
-            <div id="partsList" class="part-list"></div>
-          </div>
 
           <!-- CUSTOM REQUEST SECTION -->
           <div id="customRequestSection" style="display: none;">
@@ -792,31 +792,31 @@
 
             <div class="form-group">
               <label for="customPartName">Part Name/Description <span class="required">*</span></label>
-              <input type="text" id="customPartName" placeholder="Enter the name or description of the part..." required style="width: 100%; padding: 10px; font-size: 1em;">
+              <input type="text" id="customPartName" name="customPartName" placeholder="Enter the name or description of the part..." style="width: 100%; padding: 10px; font-size: 1em;">
               <small style="color: var(--dark-gray); display: block; margin-top: 5px;">What is the part called or what does it do?</small>
             </div>
 
             <div class="form-group">
               <label for="customPartLink">Product Link/URL <span class="required">*</span></label>
-              <input type="url" id="customPartLink" placeholder="https://example.com/product" required style="width: 100%; padding: 10px; font-size: 1em;">
+              <input type="url" id="customPartLink" name="customPartLink" placeholder="https://example.com/product" style="width: 100%; padding: 10px; font-size: 1em;">
               <small style="color: var(--dark-gray); display: block; margin-top: 5px;">Where can we order this part online?</small>
             </div>
 
             <div class="form-group">
               <label for="customPartCost">Estimated Cost (Optional)</label>
-              <input type="number" id="customPartCost" min="0" step="0.01" placeholder="0.00" style="width: 100%; padding: 10px; font-size: 1em;">
+              <input type="number" id="customPartCost" name="customPartCost" min="0" step="0.01" placeholder="0.00" style="width: 100%; padding: 10px; font-size: 1em;">
               <small style="color: var(--dark-gray); display: block; margin-top: 5px;">If known, approximately how much does this part cost?</small>
             </div>
 
             <div class="form-group">
               <label for="customPartJustification">Justification/Use Case <span class="required">*</span></label>
-              <textarea id="customPartJustification" rows="4" placeholder="Explain why you need this part and what you plan to use it for..." required style="width: 100%; padding: 10px; font-size: 1em;"></textarea>
+              <textarea id="customPartJustification" name="customPartJustification" rows="4" placeholder="Explain why you need this part and what you plan to use it for..." style="width: 100%; padding: 10px; font-size: 1em;"></textarea>
               <small style="color: var(--dark-gray); display: block; margin-top: 5px;">Why do you need this part? What will you use it for?</small>
             </div>
 
             <div class="form-group">
               <label for="customPriority">Priority <span class="required">*</span></label>
-              <select id="customPriority" required style="width: 100%; padding: 10px; font-size: 1em;">
+              <select id="customPriority" name="customPriority" style="width: 100%; padding: 10px; font-size: 1em;">
                 <option value="">Select priority...</option>
                 <option value="Low">Low - Whenever Possible</option>
                 <option value="Medium" selected>Medium - within 1 Week</option>
@@ -864,7 +864,7 @@
 
             <div class="form-group">
               <label for="csvOrderPriority">Priority <span class="required">*</span></label>
-              <select id="csvOrderPriority" required>
+              <select id="csvOrderPriority" name="csvOrderPriority">
                 <option value="">Select priority...</option>
                 <option value="Emergency">Emergency - Next Day</option>
                 <option value="High">High - 2 Days</option>
@@ -878,7 +878,7 @@
 
             <div class="form-group">
               <label for="csvOrderNotes">Notes (Optional)</label>
-              <textarea id="csvOrderNotes"
+              <textarea id="csvOrderNotes" name="csvOrderNotes"
                         rows="3"
                         placeholder="Add any special instructions or context for this CSV order..."></textarea>
             </div>
@@ -904,7 +904,7 @@
 
             <div class="form-group" style="margin-top: 20px;">
               <label for="orderPriority">Priority <span class="required">*</span></label>
-              <select id="orderPriority" required>
+              <select id="orderPriority" name="orderPriority">
                 <option value="">Select priority...</option>
                 <option value="Emergency">Emergency - Next Day</option>
                 <option value="High">High - 2 Days</option>
@@ -915,7 +915,7 @@
 
             <div class="form-group">
               <label for="orderJustification">Justification/Use Case <span class="required">*</span></label>
-              <textarea id="orderJustification" required
+              <textarea id="orderJustification" name="orderJustification"
                 placeholder="Describe how these parts will be used and why they are needed for the robot or team operations"
                 rows="4"
                 style="width: 100%; padding: 10px; font-size: 1em; border: 1px solid var(--border-gray); border-radius: 4px; resize: vertical;"></textarea>
@@ -924,7 +924,7 @@
 
             <div class="form-group">
               <label for="orderNotes">Notes (Optional)</label>
-              <textarea id="orderNotes" rows="3" placeholder="Add any special instructions or notes about this order..."></textarea>
+              <textarea id="orderNotes" name="orderNotes" rows="3" placeholder="Add any special instructions or notes about this order..."></textarea>
             </div>
 
             <div class="button-group">
@@ -958,44 +958,44 @@
             <div class="form-row">
               <div class="form-group">
                 <label for="addCategory">Category <span class="required">*</span></label>
-                <select id="addCategory" required>
+                <select id="addCategory" name="addCategory">
                   <option value="">Select category...</option>
                 </select>
               </div>
 
               <div class="form-group">
                 <label for="addSubcategory">Subcategory <span class="required">*</span></label>
-                <select id="addSubcategory" disabled onchange="handleSubcategoryChange()">
+                <select id="addSubcategory" name="addSubcategory" disabled onchange="handleSubcategoryChange()">
                   <option value="">Select category first...</option>
                 </select>
-                <input type="text" id="addSubcategoryCustom" placeholder="Enter new subcategory..." style="display: none; margin-top: 10px;">
+                <input type="text" id="addSubcategoryCustom" name="addSubcategoryCustom" placeholder="Enter new subcategory..." style="display: none; margin-top: 10px;">
               </div>
             </div>
 
             <!-- NEW: Type field for Add Part form -->
             <div class="form-group">
               <label for="addType">Type <span class="required">*</span></label>
-              <select id="addType" disabled onchange="handleTypeChange()">
+              <select id="addType" name="addType" disabled onchange="handleTypeChange()">
                 <option value="">Select subcategory first...</option>
               </select>
-              <input type="text" id="addTypeCustom" placeholder="Enter new type..." style="display: none; margin-top: 10px;">
+              <input type="text" id="addTypeCustom" name="addTypeCustom" placeholder="Enter new type..." style="display: none; margin-top: 10px;">
             </div>
 
             <div class="form-group">
               <label for="addPartName">Part Name <span class="required">*</span></label>
-              <input type="text" id="addPartName" placeholder="Enter part name..." required>
+              <input type="text" id="addPartName" name="addPartName" placeholder="Enter part name..." required>
             </div>
 
             <div class="form-group">
               <label for="addProductCode">Product Code (Optional)</label>
-              <input type="text" id="addProductCode" placeholder="e.g., WCP-0448">
+              <input type="text" id="addProductCode" name="addProductCode" placeholder="e.g., WCP-0448">
               <small style="color: var(--dark-gray); display: block; margin-top: 5px;">Manufacturer's product/part number (if applicable)</small>
             </div>
 
             <!-- Inventory and Season Fields -->
             <div class="form-group">
               <label style="display: flex; align-items: center; font-weight: normal; cursor: pointer;">
-                <input type="checkbox" id="addInventoryCheckbox" style="width: auto; margin-right: 8px;">
+                <input type="checkbox" id="addInventoryCheckbox" name="addInventoryCheckbox" style="width: auto; margin-right: 8px;">
                 <span>Add to Inventory (common stock)</span>
               </label>
               <small style="color: var(--dark-gray); display: block; margin-top: 5px;">Check this box if this part should be tracked as inventory stock</small>
@@ -1003,7 +1003,7 @@
 
             <div class="form-group">
               <label for="addPartSeasons">Seasons (Optional)</label>
-              <select id="addPartSeasons" multiple size="4" style="width: 100%; padding: 10px;">
+              <select id="addPartSeasons" name="addPartSeasons" multiple size="4" style="width: 100%; padding: 10px;">
                 <option value="">Loading seasons...</option>
               </select>
               <small style="color: var(--dark-gray); display: block; margin-top: 5px;">Hold Ctrl (Windows) or Cmd (Mac) to select multiple seasons</small>
@@ -1052,6 +1052,96 @@
             </div>
           </form>
         </div>
+
+        <!-- BULK IMPORT FROM GOOGLE SHEETS SECTION -->
+        <div id="bulkImportSection" style="display: none; margin-top: 40px; padding: 30px; border: 2px solid var(--lsu-purple); border-radius: 8px; background: #f9f9f9;">
+          <h3 style="color: var(--lsu-purple); margin-bottom: 25px; border-bottom: 2px solid var(--lsu-gold); padding-bottom: 10px;">Bulk Import from Google Sheets</h3>
+
+          <!-- Step 1: Create Template -->
+          <div class="bulk-import-step">
+            <h4 style="color: var(--lsu-purple); margin-bottom: 15px;">Step 1: Get Import Template</h4>
+            <p style="margin-bottom: 15px;">Create a new Google Sheets template with proper formatting and validation.</p>
+            <button type="button" class="button button-primary" onclick="createImportTemplate()" id="createTemplateBtn">
+              Create New Import Template
+            </button>
+
+            <div id="templateResult" style="display: none; margin-top: 15px; padding: 15px; background: #E8F5E9; border-radius: 5px;">
+              <p style="margin-bottom: 10px; font-weight: bold;">Template created successfully!</p>
+              <div style="margin-bottom: 10px;">
+                <strong>Template URL:</strong>
+                <div style="background: white; padding: 10px; border-radius: 3px; margin-top: 5px; word-break: break-all; font-size: 0.9em;" id="templateUrlDisplay"></div>
+              </div>
+              <div class="button-group">
+                <button type="button" class="button button-secondary" onclick="openTemplateUrl()">Open Template</button>
+                <button type="button" class="button button-secondary" onclick="copyTemplateUrl()">Copy Link</button>
+              </div>
+              <p style="margin-top: 15px; font-style: italic; color: #666;">Make a copy of this template (File → Make a Copy), fill it out with your parts, then proceed to Step 2.</p>
+            </div>
+          </div>
+
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+
+          <!-- Step 2: Import Sheet -->
+          <div class="bulk-import-step">
+            <h4 style="color: var(--lsu-purple); margin-bottom: 15px;">Step 2: Import Your Filled Sheet</h4>
+            <p style="margin-bottom: 15px;">After filling out your copy of the template, paste its URL below to validate and preview.</p>
+            <p style="margin-bottom: 15px; font-style: italic; color: #666; font-size: 0.95em;">
+              <strong>Important:</strong> Make sure your sheet is shared with "Anyone with the link" (View access) so the system can read it.
+            </p>
+
+            <div class="form-group">
+              <label for="importSheetUrl">Google Sheet URL <span class="required">*</span></label>
+              <input type="text" id="importSheetUrl" placeholder="https://docs.google.com/spreadsheets/d/..." style="width: 100%; padding: 10px; font-size: 1em;">
+            </div>
+
+            <button type="button" class="button button-primary" onclick="validateImportSheet()" id="validateBtn">
+              Validate and Preview
+            </button>
+          </div>
+
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+
+          <!-- Step 3: Preview Results -->
+          <div id="previewSection" style="display: none;">
+            <h4 style="color: var(--lsu-purple); margin-bottom: 15px;">Step 3: Preview Validation Results</h4>
+
+            <div id="previewSummary" style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 5px; border-left: 4px solid var(--lsu-purple);"></div>
+
+            <div id="previewTableContainer" style="max-height: 400px; overflow-y: auto; margin-bottom: 20px;">
+              <table id="previewTable" style="width: 100%; border-collapse: collapse; background: white;">
+                <thead style="position: sticky; top: 0; background: var(--lsu-purple); color: white; z-index: 10;">
+                  <tr>
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Row</th>
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Part Name</th>
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Category</th>
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Type</th>
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Status</th>
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Message</th>
+                  </tr>
+                </thead>
+                <tbody id="previewTableBody"></tbody>
+              </table>
+            </div>
+
+            <!-- Step 4: Import Confirmation -->
+            <div class="button-group">
+              <button type="button" class="button button-secondary" onclick="resetBulkImport()">Cancel</button>
+              <button type="button" class="button button-primary" onclick="confirmBulkImport()" id="confirmImportBtn" disabled>
+                Import Valid Parts
+              </button>
+            </div>
+          </div>
+
+          <!-- Results Section -->
+          <div id="resultsSection" style="display: none; margin-top: 30px;">
+            <h4 style="color: var(--lsu-purple); margin-bottom: 15px;">Import Results</h4>
+            <div id="resultsContent"></div>
+            <button type="button" class="button button-primary" onclick="resetBulkImport()" style="margin-top: 20px;">
+              Import Another Sheet
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -1064,6 +1154,10 @@
     let isFormUnlocked = false;
     let currentSpecConfig = null;
     let addPartSpecConfig = null;
+
+    // Bulk import state
+    let currentTemplateUrl = '';
+    let validationResults = null;
 
     // Initialize application
     document.addEventListener('DOMContentLoaded', function() {
@@ -2487,6 +2581,7 @@
             isFormUnlocked = true;
             document.querySelector('.password-section').style.display = 'none';
             document.getElementById('addPartFormContainer').style.display = 'block';
+            document.getElementById('bulkImportSection').style.display = 'block';
             showAlert('addPart', 'success', 'Access granted. You can now add parts to the directory.');
             setTimeout(() => hideAlert('addPart'), 3000);
 
@@ -3136,6 +3231,279 @@
     window.addEventListener('load', function() {
       loadSeasonsList();
     });
+
+    // ===== BULK IMPORT FUNCTIONS =====
+
+    /**
+     * Creates a new Google Sheets import template
+     */
+    function createImportTemplate() {
+      const btn = document.getElementById('createTemplateBtn');
+      btn.disabled = true;
+      btn.textContent = 'Creating template...';
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          btn.disabled = false;
+          btn.textContent = 'Create New Import Template';
+
+          if (result.success) {
+            currentTemplateUrl = result.templateUrl;
+            document.getElementById('templateUrlDisplay').textContent = result.templateUrl;
+            document.getElementById('templateResult').style.display = 'block';
+          } else {
+            showAlert('addPart', 'error', result.message || 'Failed to create template');
+          }
+        })
+        .withFailureHandler(function(error) {
+          btn.disabled = false;
+          btn.textContent = 'Create New Import Template';
+          showAlert('addPart', 'error', 'Error creating template: ' + error.message);
+        })
+        .createBulkImportTemplate();
+    }
+
+    /**
+     * Opens the template URL in a new window
+     */
+    function openTemplateUrl() {
+      if (currentTemplateUrl) {
+        window.open(currentTemplateUrl, '_blank');
+      }
+    }
+
+    /**
+     * Copies the template URL to clipboard
+     */
+    function copyTemplateUrl() {
+      if (currentTemplateUrl) {
+        navigator.clipboard.writeText(currentTemplateUrl).then(function() {
+          showAlert('addPart', 'success', 'Template URL copied to clipboard');
+          setTimeout(() => hideAlert('addPart'), 2000);
+        }).catch(function(err) {
+          showAlert('addPart', 'error', 'Failed to copy URL');
+        });
+      }
+    }
+
+    /**
+     * Validates and previews the import sheet
+     */
+    function validateImportSheet() {
+      const sheetUrl = document.getElementById('importSheetUrl').value;
+
+      if (!sheetUrl || sheetUrl.trim() === '') {
+        showAlert('addPart', 'error', 'Please enter a Google Sheet URL');
+        return;
+      }
+
+      const btn = document.getElementById('validateBtn');
+      btn.disabled = true;
+      btn.textContent = 'Validating...';
+
+      showLoading('addPart', true, 'Reading sheet...');
+
+      google.script.run
+        .withSuccessHandler(function(readResult) {
+          if (!readResult.success) {
+            showLoading('addPart', false);
+            btn.disabled = false;
+            btn.textContent = 'Validate and Preview';
+            showAlert('addPart', 'error', readResult.message);
+            return;
+          }
+
+          showLoading('addPart', true, 'Validating ' + readResult.rowCount + ' parts...');
+
+          google.script.run
+            .withSuccessHandler(function(validationResult) {
+              showLoading('addPart', false);
+              btn.disabled = false;
+              btn.textContent = 'Validate and Preview';
+
+              if (validationResult.success) {
+                validationResults = validationResult;
+                displayPreview(validationResult);
+              } else {
+                showAlert('addPart', 'error', validationResult.message || 'Validation failed');
+              }
+            })
+            .withFailureHandler(function(error) {
+              showLoading('addPart', false);
+              btn.disabled = false;
+              btn.textContent = 'Validate and Preview';
+              showAlert('addPart', 'error', 'Validation error: ' + error.message);
+            })
+            .validateBulkImportData(readResult.partsData);
+        })
+        .withFailureHandler(function(error) {
+          showLoading('addPart', false);
+          btn.disabled = false;
+          btn.textContent = 'Validate and Preview';
+          showAlert('addPart', 'error', 'Error reading sheet: ' + error.message);
+        })
+        .readSheetForImport(sheetUrl);
+    }
+
+    /**
+     * Displays the validation preview
+     */
+    function displayPreview(results) {
+      const { validParts, invalidParts, warnings, summary } = results;
+
+      const summaryDiv = document.getElementById('previewSummary');
+      summaryDiv.innerHTML = `
+        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 150px;">
+            <div style="font-size: 2em; font-weight: bold; color: var(--success-green);">${summary.valid}</div>
+            <div style="color: #666;">Valid Parts</div>
+          </div>
+          <div style="flex: 1; min-width: 150px;">
+            <div style="font-size: 2em; font-weight: bold; color: #FFA500;">${summary.warnings}</div>
+            <div style="color: #666;">Warnings</div>
+          </div>
+          <div style="flex: 1; min-width: 150px;">
+            <div style="font-size: 2em; font-weight: bold; color: #dc3545;">${summary.invalid}</div>
+            <div style="color: #666;">Errors</div>
+          </div>
+        </div>
+      `;
+
+      const tbody = document.getElementById('previewTableBody');
+      tbody.innerHTML = '';
+
+      validParts.forEach(part => {
+        const hasWarnings = part.warnings && part.warnings.length > 0;
+        const row = tbody.insertRow();
+        row.style.backgroundColor = hasWarnings ? '#FFF3CD' : '#E8F5E9';
+
+        row.insertCell(0).textContent = part.rowNumber;
+        row.insertCell(1).textContent = part.partName;
+        row.insertCell(2).textContent = part.category;
+        row.insertCell(3).textContent = part.type;
+        row.insertCell(4).innerHTML = hasWarnings ? '<span style="color: #FFA500;">Warning</span>' : '<span style="color: var(--success-green);">Valid</span>';
+        row.insertCell(5).textContent = hasWarnings ? part.warnings.join(', ') : 'Ready to import';
+      });
+
+      invalidParts.forEach(part => {
+        const row = tbody.insertRow();
+        row.style.backgroundColor = '#FFE5E5';
+
+        row.insertCell(0).textContent = part.rowNumber;
+        row.insertCell(1).textContent = part.partName;
+        row.insertCell(2).textContent = part.category;
+        row.insertCell(3).textContent = part.type;
+        row.insertCell(4).innerHTML = '<span style="color: #dc3545;">Error</span>';
+        row.insertCell(5).textContent = part.errors.join(', ');
+      });
+
+      document.getElementById('previewSection').style.display = 'block';
+
+      const confirmBtn = document.getElementById('confirmImportBtn');
+      if (summary.valid > 0) {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Import ' + summary.valid + ' Valid Parts';
+      } else {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'No Valid Parts to Import';
+      }
+
+      document.getElementById('previewSection').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    /**
+     * Confirms and executes the bulk import
+     */
+    function confirmBulkImport() {
+      if (!validationResults || validationResults.validParts.length === 0) {
+        showAlert('addPart', 'error', 'No valid parts to import');
+        return;
+      }
+
+      const validCount = validationResults.validParts.length;
+      const confirmMsg = 'Import ' + validCount + ' parts to the directory?';
+
+      if (!confirm(confirmMsg)) {
+        return;
+      }
+
+      const btn = document.getElementById('confirmImportBtn');
+      btn.disabled = true;
+      btn.textContent = 'Importing...';
+
+      showLoading('addPart', true, 'Importing ' + validCount + ' parts...');
+
+      google.script.run
+        .withSuccessHandler(function(importResult) {
+          showLoading('addPart', false);
+          btn.disabled = false;
+          btn.textContent = 'Import Valid Parts';
+
+          if (importResult.success) {
+            displayImportResults(importResult);
+          } else {
+            showAlert('addPart', 'error', importResult.message || 'Import failed');
+          }
+        })
+        .withFailureHandler(function(error) {
+          showLoading('addPart', false);
+          btn.disabled = false;
+          btn.textContent = 'Import Valid Parts';
+          showAlert('addPart', 'error', 'Import error: ' + error.message);
+        })
+        .bulkImportPartsFromSheet(validationResults.validParts);
+    }
+
+    /**
+     * Displays import results
+     */
+    function displayImportResults(results) {
+      const { imported, failed, summary } = results;
+
+      let html = '';
+
+      if (summary.successCount > 0) {
+        html += '<div style="padding: 15px; background: #E8F5E9; border-radius: 5px; margin-bottom: 20px;">';
+        html += '<h5 style="color: var(--success-green); margin-bottom: 10px;">Successfully Imported ' + summary.successCount + ' Parts</h5>';
+        html += '<div style="max-height: 200px; overflow-y: auto;">';
+        imported.forEach(part => {
+          html += '<div style="padding: 5px; border-bottom: 1px solid #ddd;">';
+          html += '<strong>' + part.partID + '</strong>: ' + part.partName + ' (Row ' + part.rowNumber + ')';
+          html += '</div>';
+        });
+        html += '</div></div>';
+      }
+
+      if (summary.failCount > 0) {
+        html += '<div style="padding: 15px; background: #FFE5E5; border-radius: 5px;">';
+        html += '<h5 style="color: #dc3545; margin-bottom: 10px;">Failed to Import ' + summary.failCount + ' Parts</h5>';
+        html += '<div style="max-height: 200px; overflow-y: auto;">';
+        failed.forEach(part => {
+          html += '<div style="padding: 5px; border-bottom: 1px solid #ddd;">';
+          html += '<strong>' + part.partName + '</strong> (Row ' + part.rowNumber + '): ' + part.error;
+          html += '</div>';
+        });
+        html += '</div></div>';
+      }
+
+      document.getElementById('resultsContent').innerHTML = html;
+      document.getElementById('previewSection').style.display = 'none';
+      document.getElementById('resultsSection').style.display = 'block';
+      document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    /**
+     * Resets the bulk import form
+     */
+    function resetBulkImport() {
+      document.getElementById('importSheetUrl').value = '';
+      document.getElementById('previewSection').style.display = 'none';
+      document.getElementById('resultsSection').style.display = 'none';
+      document.getElementById('templateResult').style.display = 'none';
+      validationResults = null;
+      currentTemplateUrl = '';
+      hideAlert('addPart');
+    }
 
   </script>
 

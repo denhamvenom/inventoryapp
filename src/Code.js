@@ -53,33 +53,62 @@ function doGet(e) {
 
 /**
  * Gets all unique categories from the parts directory
+ * Reads from the Categories sheet to include all valid categories,
+ * not just those with existing parts
  * @returns {Array<string>} Sorted array of category names
  */
 function getCategories() {
   try {
     const ss = SpreadsheetApp.openById(CONFIG.PARTS_DIRECTORY_ID);
-    const sheet = ss.getSheetByName(CONFIG.PARTS_SHEET_NAME);
+    const sheet = ss.getSheetByName('Categories');
 
     if (!sheet) {
-      throw new Error('Parts sheet not found');
+      Logger.log('Available sheets: ' + ss.getSheets().map(s => s.getName()).join(', '));
+      throw new Error('Categories sheet not found');
     }
 
     const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    const categoryCol = headers.indexOf('Category');
+    Logger.log('Categories sheet data length: ' + data.length + ' rows');
 
-    if (categoryCol === -1) {
-      throw new Error('Category column not found');
+    if (data.length < 2) {
+      Logger.log('No data in Categories sheet');
+      return []; // No category data
     }
 
-    const categories = new Set();
+    const headers = data[0];
+    Logger.log('Categories sheet headers: ' + JSON.stringify(headers));
+    Logger.log('Header[0] is: "' + headers[0] + '"');
+    Logger.log('Total header columns: ' + headers.length);
+    Logger.log('Total data rows: ' + data.length);
+    let categoryNameCol = headers.indexOf('Category Name');
+
+    // Try alternate header name if not found
+    if (categoryNameCol === -1) {
+      categoryNameCol = headers.indexOf('Category');
+    }
+
+    if (categoryNameCol === -1) {
+      Logger.log('Category Name or Category column not found. Checking all headers:');
+      for (let j = 0; j < headers.length; j++) {
+        Logger.log('Column ' + j + ': "' + headers[j] + '"');
+      }
+      throw new Error('Category Name column not found in Categories sheet. Available columns: ' + headers.join(', '));
+    }
+
+    const categories = [];
     for (let i = 1; i < data.length; i++) {
-      if (data[i][categoryCol]) {
-        categories.add(data[i][categoryCol].toString().trim());
+      if (data[i][categoryNameCol]) {
+        const categoryName = data[i][categoryNameCol].toString().trim();
+        if (categoryName) {
+          categories.push(categoryName);
+        }
       }
     }
 
-    return Array.from(categories).sort();
+    Logger.log('Retrieved ' + categories.length + ' categories from Categories sheet');
+    Logger.log('Data rows processed: ' + (data.length - 1) + ', Category Name column index: ' + categoryNameCol);
+    Logger.log('All categories retrieved: ' + JSON.stringify(categories.sort()));
+    return categories.sort();
   } catch (error) {
     Logger.log('Error in getCategories: ' + error.toString());
     throw new Error('Failed to retrieve categories: ' + error.message);
@@ -1405,26 +1434,53 @@ function addPartToDirectory(partData) {
 
 /**
  * Generates a sequential Part ID based on category
- * Format: CATEGORY-XXX (e.g., FAST-001, ELEC-015)
- * @param {string} category - The category for the part
+ * Format: CODE-XXX (e.g., STOCK-001, FAST-015)
+ * Uses the Code from the Categories sheet, not derived from category name
+ * @param {string} category - The category name for the part
  * @returns {string} The generated Part ID
  */
 function generatePartID(category) {
   try {
     const ss = SpreadsheetApp.openById(CONFIG.PARTS_DIRECTORY_ID);
-    const sheet = ss.getSheetByName(CONFIG.PARTS_SHEET_NAME);
 
-    if (!sheet) {
+    // First, get the category code from the Categories sheet
+    const categoriesSheet = ss.getSheetByName('Categories');
+    if (!categoriesSheet) {
+      throw new Error('Categories sheet not found');
+    }
+
+    const categoriesData = categoriesSheet.getDataRange().getValues();
+    const categoriesHeaders = categoriesData[0];
+    const categoryNameCol = categoriesHeaders.indexOf('Category Name');
+    const codeCol = categoriesHeaders.indexOf('Code');
+
+    if (categoryNameCol === -1 || codeCol === -1) {
+      throw new Error('Category Name or Code column not found in Categories sheet');
+    }
+
+    // Find the code for this category
+    let prefix = '';
+    for (let i = 1; i < categoriesData.length; i++) {
+      if (categoriesData[i][categoryNameCol] &&
+          categoriesData[i][categoryNameCol].toString().trim() === category) {
+        prefix = categoriesData[i][codeCol] ? categoriesData[i][codeCol].toString().trim() : '';
+        break;
+      }
+    }
+
+    if (!prefix) {
+      throw new Error('Category "' + category + '" not found in Categories sheet');
+    }
+
+    // Get all existing Part IDs from Parts sheet
+    const partsSheet = ss.getSheetByName(CONFIG.PARTS_SHEET_NAME);
+    if (!partsSheet) {
       throw new Error('Parts sheet not found');
     }
 
-    // Create category prefix (first 4 letters, uppercase)
-    const prefix = category.substring(0, 4).toUpperCase();
-
-    // Get all existing Part IDs
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    const partIDCol = headers.indexOf('Part ID');
+    const partsData = partsSheet.getDataRange().getValues();
+    const partsHeaders = partsData[0];
+    const partIDCol = partsHeaders.indexOf('Part ID');
 
     if (partIDCol === -1) {
       throw new Error('Part ID column not found');
@@ -1434,8 +1490,8 @@ function generatePartID(category) {
     let maxNumber = 0;
     const prefixPattern = new RegExp('^' + prefix + '-(\\d+)$');
 
-    for (let i = 1; i < data.length; i++) {
-      const partID = data[i][partIDCol];
+    for (let i = 1; i < partsData.length; i++) {
+      const partID = partsData[i][partIDCol];
       if (partID) {
         const match = partID.toString().match(prefixPattern);
         if (match) {
@@ -1515,6 +1571,514 @@ function checkForDuplicates(partName) {
     Logger.log('Error in checkForDuplicates: ' + error.toString());
     // Return true to allow operation to continue
     return { isUnique: true };
+  }
+}
+
+// ===== BULK IMPORT FUNCTIONS =====
+
+/**
+ * Gets all existing Category/Subcategory/Type combinations from Parts Directory
+ * Used to populate the "Available Options" tab in bulk import template
+ * @returns {Array<Object>} Array of {category, subcategory, type} objects
+ */
+function getExistingCombinations() {
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.PARTS_DIRECTORY_ID);
+    const sheet = ss.getSheetByName(CONFIG.PARTS_SHEET_NAME);
+
+    if (!sheet) {
+      throw new Error('Parts sheet not found');
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+
+    const categoryCol = headers.indexOf('Category');
+    const subcategoryCol = headers.indexOf('Subcategory');
+    const typeCol = headers.indexOf('Type');
+
+    if (categoryCol === -1 || subcategoryCol === -1 || typeCol === -1) {
+      throw new Error('Required columns not found');
+    }
+
+    const combinations = [];
+    const seen = new Set();
+
+    for (let i = 1; i < data.length; i++) {
+      const category = data[i][categoryCol] ? data[i][categoryCol].toString().trim() : '';
+      const subcategory = data[i][subcategoryCol] ? data[i][subcategoryCol].toString().trim() : '';
+      const type = data[i][typeCol] ? data[i][typeCol].toString().trim() : '';
+
+      if (category && subcategory && type) {
+        const key = category + '|' + subcategory + '|' + type;
+        if (!seen.has(key)) {
+          seen.add(key);
+          combinations.push({
+            category: category,
+            subcategory: subcategory,
+            type: type
+          });
+        }
+      }
+    }
+
+    combinations.sort((a, b) => {
+      if (a.category !== b.category) return a.category.localeCompare(b.category);
+      if (a.subcategory !== b.subcategory) return a.subcategory.localeCompare(b.subcategory);
+      return a.type.localeCompare(b.type);
+    });
+
+    return combinations;
+  } catch (error) {
+    Logger.log('Error in getExistingCombinations: ' + error.toString());
+    return [];
+  }
+}
+
+/**
+ * Creates a new Google Sheets template for bulk part import
+ * Template includes: Parts to Import tab, Available Options tab, Valid Categories tab, Instructions tab
+ * @returns {Object} Result with templateUrl, templateId, and success status
+ */
+function createBulkImportTemplate() {
+  try {
+    const templateName = 'Parts Bulk Import Template - ' + new Date().toLocaleDateString();
+    const ss = SpreadsheetApp.create(templateName);
+    const ssId = ss.getId();
+
+    ss.getSheets()[0].setName('Parts to Import');
+    const importSheet = ss.getSheetByName('Parts to Import');
+
+    const headers = [
+      'Part Name*', 'Category*', 'Subcategory*', 'Type*', 'Product Code',
+      'Spec 1', 'Spec 2', 'Spec 3', 'Spec 4', 'Spec 5',
+      'Quantity Per*', 'Cost*', 'Supplier*', 'Order Link*', 'Notes',
+      'Inventory', 'Seasons'
+    ];
+    importSheet.appendRow(headers);
+
+    const headerRange = importSheet.getRange(1, 1, 1, headers.length);
+    headerRange.setBackground('#461D7C');
+    headerRange.setFontColor('#FFFFFF');
+    headerRange.setFontWeight('bold');
+    headerRange.setFontSize(11);
+    importSheet.setFrozenRows(1);
+
+    const requiredCols = [1, 2, 3, 4, 11, 12, 13, 14];
+    requiredCols.forEach(col => {
+      importSheet.getRange(1, col).setBackground('#FDD023');
+      importSheet.getRange(1, col).setFontColor('#000000');
+    });
+
+    const exampleRow = [
+      'Socket Head Cap Screw', 'Fasteners', 'Screws', 'Socket Head', 'SH-832-050',
+      '8-32', '0.5"', '-', '-', '-',
+      '100', '8.99', 'McMaster-Carr', 'https://www.mcmaster.com', 'Standard stainless steel',
+      'No', ''
+    ];
+    importSheet.appendRow(exampleRow);
+    importSheet.getRange(2, 1, 1, headers.length).setBackground('#E8F5E9');
+
+    const categories = getCategories();
+    const categoryValidation = SpreadsheetApp.newDataValidation()
+      .requireValueInList(categories, true)
+      .setAllowInvalid(false)
+      .build();
+    importSheet.getRange(2, 2, 998, 1).setDataValidation(categoryValidation);
+
+    const inventoryValidation = SpreadsheetApp.newDataValidation()
+      .requireValueInList(['Yes', 'No'], true)
+      .setAllowInvalid(false)
+      .build();
+    importSheet.getRange(2, 16, 998, 1).setDataValidation(inventoryValidation);
+
+    for (let i = 1; i <= headers.length; i++) {
+      importSheet.autoResizeColumn(i);
+    }
+
+    const optionsSheet = ss.insertSheet('Available Options', 1);
+    optionsSheet.appendRow(['Category', 'Subcategory', 'Type']);
+    const optionsHeaderRange = optionsSheet.getRange(1, 1, 1, 3);
+    optionsHeaderRange.setBackground('#461D7C');
+    optionsHeaderRange.setFontColor('#FFFFFF');
+    optionsHeaderRange.setFontWeight('bold');
+    optionsSheet.setFrozenRows(1);
+
+    optionsSheet.getRange(2, 1, 1, 3).setValues([[
+      'Use Ctrl+F to search. These are existing combinations in your system.',
+      'You can add new Subcategories/Types, but Categories must match exactly.',
+      ''
+    ]]);
+    optionsSheet.getRange(2, 1, 1, 3).setBackground('#FFF3CD').setFontStyle('italic');
+
+    const combinations = getExistingCombinations();
+    if (combinations.length > 0) {
+      const optionsData = combinations.map(c => [c.category, c.subcategory, c.type]);
+      optionsSheet.getRange(3, 1, optionsData.length, 3).setValues(optionsData);
+    }
+
+    for (let i = 1; i <= 3; i++) {
+      optionsSheet.autoResizeColumn(i);
+    }
+
+    const categoriesSheet = ss.insertSheet('Valid Categories', 2);
+    categoriesSheet.hideSheet();
+    categoriesSheet.appendRow(['Category']);
+    categories.forEach(cat => categoriesSheet.appendRow([cat]));
+
+    const instructionsSheet = ss.insertSheet('Instructions', 3);
+    instructionsSheet.appendRow(['BULK IMPORT INSTRUCTIONS']);
+    instructionsSheet.getRange(1, 1).setFontSize(14).setFontWeight('bold').setBackground('#461D7C').setFontColor('#FFFFFF');
+
+    const instructions = [
+      [''],
+      ['HOW TO USE THIS TEMPLATE:'],
+      ['1. File → Make a Copy (do not edit this template directly)'],
+      ['2. Review the "Available Options" tab to see existing Category/Subcategory/Type combinations'],
+      ['3. Fill out the "Parts to Import" tab with your parts (delete the example row)'],
+      ['4. Required fields are marked with * and highlighted in gold'],
+      ['5. Category dropdown only allows existing categories (no new categories)'],
+      ['6. Subcategory and Type are free text, but use existing options when possible'],
+      ['7. Copy your sheet URL when done'],
+      ['8. Return to the web app and paste the URL to import'],
+      [''],
+      ['REQUIRED FIELDS (must be filled):'],
+      ['- Part Name, Category, Subcategory, Type'],
+      ['- Quantity Per, Cost, Supplier, Order Link'],
+      [''],
+      ['OPTIONAL FIELDS:'],
+      ['- Product Code, Spec 1-5, Notes, Inventory, Seasons'],
+      [''],
+      ['AUTO-GENERATED FIELDS (do not include):'],
+      ['- Part ID (system generates unique IDs)'],
+      ['- Status (always set to "Active")'],
+      ['- Date Added, Added By (automatically recorded)'],
+      [''],
+      ['TIPS:'],
+      ['- Use Ctrl+F in "Available Options" to search for existing options'],
+      ['- You can add multiple parts (up to 500 rows)'],
+      ['- Invalid rows will be flagged during import preview'],
+      ['- Only valid rows will be imported']
+    ];
+    instructionsSheet.getRange(2, 1, instructions.length, 1).setValues(instructions);
+    instructionsSheet.getRange(3, 1).setFontWeight('bold').setFontSize(12);
+    instructionsSheet.getRange(13, 1).setFontWeight('bold').setFontSize(11);
+    instructionsSheet.getRange(18, 1).setFontWeight('bold').setFontSize(11);
+    instructionsSheet.getRange(23, 1).setFontWeight('bold').setFontSize(11);
+    instructionsSheet.getRange(28, 1).setFontWeight('bold').setFontSize(11);
+    instructionsSheet.autoResizeColumn(1);
+
+    const file = DriveApp.getFileById(ssId);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    return {
+      success: true,
+      templateUrl: ss.getUrl(),
+      templateId: ssId,
+      message: 'Template created successfully'
+    };
+  } catch (error) {
+    Logger.log('Error in createBulkImportTemplate: ' + error.toString());
+    return {
+      success: false,
+      message: 'Failed to create template: ' + error.message
+    };
+  }
+}
+
+/**
+ * Extracts Sheet ID from various Google Sheets URL formats
+ * @param {string} url - Google Sheets URL
+ * @returns {string|null} Sheet ID or null if invalid
+ */
+function extractSheetIdFromUrl(url) {
+  try {
+    if (!url || typeof url !== 'string') return null;
+
+    const patterns = [
+      /\/d\/([a-zA-Z0-9-_]+)/,
+      /key=([a-zA-Z0-9-_]+)/,
+      /^([a-zA-Z0-9-_]+)$/
+    ];
+
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+
+    return null;
+  } catch (error) {
+    Logger.log('Error extracting sheet ID: ' + error.toString());
+    return null;
+  }
+}
+
+/**
+ * Reads data from a user's filled import sheet
+ * @param {string} sheetUrl - URL of the Google Sheet to import
+ * @returns {Object} Result with partsData array and metadata
+ */
+function readSheetForImport(sheetUrl) {
+  try {
+    const sheetId = extractSheetIdFromUrl(sheetUrl);
+
+    if (!sheetId) {
+      return {
+        success: false,
+        message: 'Invalid Google Sheets URL. Please check the URL and try again.'
+      };
+    }
+
+    let ss;
+    try {
+      ss = SpreadsheetApp.openById(sheetId);
+    } catch (e) {
+      return {
+        success: false,
+        message: 'Unable to access this sheet. Please ensure the sheet is shared with "Anyone with the link" (View access).'
+      };
+    }
+
+    const sheet = ss.getSheetByName('Parts to Import');
+    if (!sheet) {
+      return {
+        success: false,
+        message: 'Sheet must have a tab named "Parts to Import". Please use the template provided.'
+      };
+    }
+
+    const data = sheet.getDataRange().getValues();
+
+    if (data.length < 2) {
+      return {
+        success: false,
+        message: 'No data found in the sheet. Please add parts to import.'
+      };
+    }
+
+    const headers = data[0];
+    const expectedHeaders = [
+      'Part Name*', 'Category*', 'Subcategory*', 'Type*', 'Product Code',
+      'Spec 1', 'Spec 2', 'Spec 3', 'Spec 4', 'Spec 5',
+      'Quantity Per*', 'Cost*', 'Supplier*', 'Order Link*', 'Notes',
+      'Inventory', 'Seasons'
+    ];
+
+    const partsData = [];
+    for (let i = 1; i < data.length && i < 501; i++) {
+      const row = data[i];
+
+      if (!row[0] || row[0].toString().trim() === '') {
+        continue;
+      }
+
+      partsData.push({
+        rowNumber: i + 1,
+        partName: row[0] ? row[0].toString().trim() : '',
+        category: row[1] ? row[1].toString().trim() : '',
+        subcategory: row[2] ? row[2].toString().trim() : '',
+        type: row[3] ? row[3].toString().trim() : '',
+        productCode: row[4] ? row[4].toString().trim() : '',
+        spec1: row[5] ? row[5].toString().trim() : '-',
+        spec2: row[6] ? row[6].toString().trim() : '-',
+        spec3: row[7] ? row[7].toString().trim() : '-',
+        spec4: row[8] ? row[8].toString().trim() : '-',
+        spec5: row[9] ? row[9].toString().trim() : '-',
+        quantity: row[10],
+        unitCost: row[11],
+        supplier: row[12] ? row[12].toString().trim() : '',
+        supplierPartNumber: row[13] ? row[13].toString().trim() : '',
+        notes: row[14] ? row[14].toString().trim() : '',
+        inventory: row[15] && row[15].toString().trim().toLowerCase() === 'yes',
+        seasons: row[16] ? row[16].toString().trim() : ''
+      });
+    }
+
+    if (partsData.length === 0) {
+      return {
+        success: false,
+        message: 'No valid rows found. Make sure Part Name column has data.'
+      };
+    }
+
+    return {
+      success: true,
+      partsData: partsData,
+      rowCount: partsData.length,
+      message: 'Successfully read ' + partsData.length + ' rows from sheet'
+    };
+  } catch (error) {
+    Logger.log('Error in readSheetForImport: ' + error.toString());
+    return {
+      success: false,
+      message: 'Error reading sheet: ' + error.message
+    };
+  }
+}
+
+/**
+ * Validates bulk import data from sheet
+ * Checks required fields, data types, categories, and duplicates
+ * @param {Array<Object>} partsArray - Array of part objects to validate
+ * @returns {Object} Validation results with valid, invalid, and warning arrays
+ */
+function validateBulkImportData(partsArray) {
+  try {
+    const validCategories = getCategories();
+    const validParts = [];
+    const invalidParts = [];
+    const warnings = [];
+
+    for (const part of partsArray) {
+      const errors = [];
+      const partWarnings = [];
+
+      if (!part.partName || part.partName.trim() === '') {
+        errors.push('Part Name is required');
+      }
+
+      if (!part.category || part.category.trim() === '') {
+        errors.push('Category is required');
+      } else if (!validCategories.includes(part.category)) {
+        errors.push('Category "' + part.category + '" does not exist. Must use existing category.');
+      }
+
+      if (!part.subcategory || part.subcategory.trim() === '') {
+        errors.push('Subcategory is required');
+      }
+
+      if (!part.type || part.type.trim() === '') {
+        errors.push('Type is required');
+      }
+
+      if (!part.supplier || part.supplier.trim() === '') {
+        errors.push('Supplier is required');
+      }
+
+      if (!part.supplierPartNumber || part.supplierPartNumber.trim() === '') {
+        errors.push('Order Link is required');
+      }
+
+      const quantity = parseFloat(part.quantity);
+      if (isNaN(quantity) || quantity < 0) {
+        errors.push('Quantity Per must be a number >= 0');
+      }
+
+      const cost = parseFloat(part.unitCost);
+      if (isNaN(cost) || cost < 0) {
+        errors.push('Cost must be a number >= 0');
+      }
+
+      if (errors.length === 0) {
+        const duplicateCheck = checkForDuplicates(part.partName);
+        if (duplicateCheck && !duplicateCheck.isUnique) {
+          partWarnings.push('Part name may be a duplicate');
+        }
+
+        if (quantity === 0) {
+          partWarnings.push('Quantity is 0');
+        }
+
+        validParts.push({
+          ...part,
+          quantity: quantity,
+          unitCost: cost,
+          warnings: partWarnings
+        });
+
+        if (partWarnings.length > 0) {
+          warnings.push({
+            rowNumber: part.rowNumber,
+            partName: part.partName,
+            warnings: partWarnings
+          });
+        }
+      } else {
+        invalidParts.push({
+          rowNumber: part.rowNumber,
+          partName: part.partName,
+          category: part.category,
+          subcategory: part.subcategory,
+          type: part.type,
+          errors: errors
+        });
+      }
+    }
+
+    return {
+      success: true,
+      validParts: validParts,
+      invalidParts: invalidParts,
+      warnings: warnings,
+      summary: {
+        total: partsArray.length,
+        valid: validParts.length,
+        invalid: invalidParts.length,
+        warnings: warnings.length
+      }
+    };
+  } catch (error) {
+    Logger.log('Error in validateBulkImportData: ' + error.toString());
+    return {
+      success: false,
+      message: 'Error validating data: ' + error.message
+    };
+  }
+}
+
+/**
+ * Imports validated parts in bulk to the Parts Directory
+ * @param {Array<Object>} validatedParts - Array of validated part objects
+ * @returns {Object} Import results with success/failure details
+ */
+function bulkImportPartsFromSheet(validatedParts) {
+  try {
+    const imported = [];
+    const failed = [];
+
+    for (const part of validatedParts) {
+      try {
+        const result = addPartToDirectory(part);
+
+        if (result.success) {
+          imported.push({
+            rowNumber: part.rowNumber,
+            partName: part.partName,
+            partID: result.partID
+          });
+        } else {
+          failed.push({
+            rowNumber: part.rowNumber,
+            partName: part.partName,
+            error: result.message
+          });
+        }
+      } catch (error) {
+        failed.push({
+          rowNumber: part.rowNumber,
+          partName: part.partName,
+          error: error.message
+        });
+      }
+    }
+
+    return {
+      success: true,
+      imported: imported,
+      failed: failed,
+      summary: {
+        successCount: imported.length,
+        failCount: failed.length
+      }
+    };
+  } catch (error) {
+    Logger.log('Error in bulkImportPartsFromSheet: ' + error.toString());
+    return {
+      success: false,
+      message: 'Error during import: ' + error.message
+    };
   }
 }
 

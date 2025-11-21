@@ -192,6 +192,18 @@ DVOM/
 9. Cache Sheet data when possible for performance
 10. Maintain professional tone in all user-facing text
 
+## Critical Debugging Instructions
+**ALWAYS follow this when debugging issues:**
+1. **Search all source files for duplicate functions** - Use grep/find across all .js files in /src FIRST. Multiple files defining the same function cause conflicts and are hard to spot. Code.js and DataAccess.js are particularly prone to this.
+2. **Never assume incomplete data** - If user says data exists in a sheet, trust that and look for code issues instead.
+3. **Grep before hypothesis** - Before running tests or asking for logs, search the codebase comprehensively.
+4. **Check the manifest** - Multiple file deployments can have function name conflicts. When two functions have the same name across files, the last one loaded wins.
+5. **Use user-provided evidence** - If user provides CSV exports or file downloads, use those directly instead of asking them to re-run tests or paste output repeatedly.
+
+## Known Issues to Avoid
+- **Duplicate function definitions**: Code.js and DataAccess.js both had getCategories() - the DataAccess version was shadowing the correct one in Code.js
+- **Function scoping in Google Apps Script**: When multiple .gs/.js files are deployed, functions are global and duplicates conflict
+
 ## UI Text Standards
 ### Success Messages:
 - Correct: "Order submitted successfully"

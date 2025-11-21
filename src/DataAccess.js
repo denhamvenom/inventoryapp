@@ -494,14 +494,6 @@ function getUniqueInventoryValues(columnName) {
 }
 
 /**
- * Gets all unique categories from inventory
- * @returns {Array<string>} Array of category codes
- */
-function getCategories() {
-  return getUniqueInventoryValues('Category');
-}
-
-/**
  * Gets all unique suppliers from inventory
  * @returns {Array<string>} Array of supplier names
  */
